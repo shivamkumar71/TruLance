@@ -650,6 +650,97 @@ interface DiscoveredSource {
   independence?: "Independent" | "Direct" | "Syndicated";
 }
 
+type SourceFamily = "official" | "wikipedia" | "news" | "fact-check" | "research" | "other";
+
+function getSourceFamily(urlStr: string, publisher = ""): SourceFamily {
+  const host = (() => {
+    try {
+      return new URL(urlStr).hostname.toLowerCase();
+    } catch {
+      return "";
+    }
+  })();
+  const name = publisher.toLowerCase();
+
+  if (
+    host.includes("wikipedia.org") ||
+    name.includes("wikipedia")
+  ) return "wikipedia";
+  if (
+    host.endsWith(".gov") ||
+    host.endsWith(".gov.in") ||
+    host.endsWith(".nic.in") ||
+    host.endsWith(".mil") ||
+    host.includes("who.int") ||
+    host.includes("un.org") ||
+    host.includes("nasa.gov") ||
+    host.includes("jpl.nasa.gov") ||
+    name.includes("government") ||
+    name.includes("ministry") ||
+    name.includes("official")
+  ) return "official";
+  if (
+    host.includes("snopes.com") ||
+    host.includes("factcheck.org") ||
+    host.includes("politifact.com") ||
+    host.includes("boomlive.in") ||
+    host.includes("altnews.in") ||
+    host.includes("afp.com") ||
+    name.includes("fact check")
+  ) return "fact-check";
+  if (
+    host.includes("reuters.com") ||
+    host.includes("apnews.com") ||
+    host.includes("bbc.com") ||
+    host.includes("bbc.co.uk") ||
+    host.includes("thehindu.com") ||
+    host.includes("nytimes.com") ||
+    host.includes("bloomberg.com") ||
+    host.includes("livemint.com") ||
+    host.includes("indianexpress.com") ||
+    host.includes("economictimes.indiatimes.com") ||
+    name.includes("news") ||
+    name.includes("press")
+  ) return "news";
+  if (
+    host.includes("nature.com") ||
+    host.includes("science.org") ||
+    host.includes("thelancet.com") ||
+    host.includes("arxiv.org") ||
+    host.includes("nih.gov") ||
+    name.includes("research") ||
+    name.includes("journal")
+  ) return "research";
+  return "other";
+}
+
+function selectDiverseCandidates(sources: DiscoveredSource[]): DiscoveredSource[] {
+  const ordered = [...sources].sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0));
+  const selected: DiscoveredSource[] = [];
+  const selectedUrls = new Set<string>();
+  const preferredFamilies: SourceFamily[] = ["official", "wikipedia", "news", "fact-check", "research"];
+
+  for (const family of preferredFamilies) {
+    const match = ordered.find(
+      (source) => !selectedUrls.has(source.url) && getSourceFamily(source.url, source.publisher) === family
+    );
+    if (match) {
+      selected.push(match);
+      selectedUrls.add(match.url);
+    }
+  }
+
+  for (const source of ordered) {
+    if (selected.length >= 8) break;
+    if (!selectedUrls.has(source.url)) {
+      selected.push(source);
+      selectedUrls.add(source.url);
+    }
+  }
+
+  return selected;
+}
+
 // In-Memory Search & Verification Cache (10-minute TTL) for Rate-Limit Safety
 const searchCache = new Map<string, { data: DiscoveredSource[]; timestamp: number }>();
 const CACHE_TTL_MS = 10 * 60 * 1000;
@@ -949,7 +1040,16 @@ function generateStagedQueries(
     }
   }
 
-  const cleanQueries = Array.from(new Set(queries.filter((q) => q && q.trim().length > 3))).slice(0, 4);
+  const claimAnchor = (firstSentence || `${entityStr} ${numStr} ${dateStr}` || targetText).trim().slice(0, 110);
+  const targetedQueries = [
+    claimAnchor,
+    `${claimAnchor} official government primary source site:gov OR site:gov.in OR site:nic.in`,
+    `${claimAnchor} Wikipedia site:wikipedia.org`,
+    `${claimAnchor} Reuters OR AP News OR BBC OR fact check`,
+  ];
+  const cleanQueries = Array.from(
+    new Set([...targetedQueries, ...queries].filter((q) => q && q.trim().length > 3))
+  ).slice(0, 4);
   return { queries: cleanQueries, claimInfo, temporalInfo };
 }
 
@@ -1128,7 +1228,7 @@ async function discoverRealWebSources(
     return (b.relevanceScore || 0) - (a.relevanceScore || 0);
   });
 
-  return deduplicated.slice(0, 8);
+  return selectDiverseCandidates(deduplicated);
 }
 
 // Extract text from DOC/DOCX buffers using mammoth
@@ -1432,15 +1532,17 @@ OUTPUT JSON FORMAT:
     if (discoveredSources.length > 0) {
       sourcesPromptBlock = `VERIFIED SEARCH SOURCES DISCOVERED FROM LIVE WEB SEARCH (with exact verified URLs):\n`;
       discoveredSources.forEach((s, idx) => {
-        sourcesPromptBlock += `[Candidate ${idx + 1}]:\n  Title: "${s.title}"\n  Publisher: "${s.publisher}"\n  Exact URL: "${s.url}"\n  Syndication: ${(s as any).independence || "Independent"}\n`;
+        sourcesPromptBlock += `[Candidate ${idx + 1}]:\n  Title: "${s.title}"\n  Publisher: "${s.publisher}"\n  Exact URL: "${s.url}"\n  Source family: "${getSourceFamily(s.url, s.publisher)}"\n  Relevance score: ${s.relevanceScore || 0}\n  Syndication: ${(s as any).independence || "Independent"}\n`;
       });
       sourcesPromptBlock += `\nCRITICAL SOURCE CITATION RULES:
 1. Select and cite sources ONLY from the Candidate list above if they directly support, refute, or contextualize this specific claim.
 2. The "url" field MUST be the EXACT URL provided in the candidate list.
 3. NEVER generate, guess, reconstruct, modify, shorten, or invent any URL.
 4. If a candidate source is irrelevant or merely a generic index/homepage, REJECT IT.
-5. If multiple candidates are available and relevant, select and provide 4 to 5 top diverse resources covering Official portals, Major News websites, and specialized Blogs/Analyses.
-6. If NO candidate sources are directly relevant, return "sources": [] and verdict "UNVERIFIED".\n`;
+5. Select 4 to 5 directly relevant sources whenever 4 or more relevant candidates exist.
+6. Prefer one source from each available family in this order: official, wikipedia, news, fact-check, research.
+7. Do not fill the list with multiple URLs from the same publisher or syndicated story when another relevant family is available.
+8. If NO candidate sources are directly relevant, return "sources": [] and verdict "UNVERIFIED".\n`;
     } else {
       sourcesPromptBlock = `No live search sources were pre-discovered for this query. If you cite sources, set "url": null unless citing an exact official standard. NEVER guess or fabricate URLs.\n`;
     }
@@ -1625,7 +1727,19 @@ OUTPUT JSON FORMAT:
         if (usedUrls.has(ds.url)) continue;
         if (!isValidSpecificUrl(ds.url)) continue;
 
-        const cat = normalizeCategory(undefined, false);
+        const sourceFamily = getSourceFamily(ds.url, ds.publisher);
+        const cat: SourceCategory =
+          sourceFamily === "official"
+            ? "Official"
+            : sourceFamily === "wikipedia"
+              ? "Historical Context"
+              : sourceFamily === "news"
+                ? "News"
+                : sourceFamily === "fact-check"
+                  ? "Fact Check"
+                  : sourceFamily === "research"
+                    ? "Research"
+                    : "Other";
         const tierInfo = classifySourceTier(ds.url, ds.publisher, cat);
 
         usedUrls.add(ds.url);
