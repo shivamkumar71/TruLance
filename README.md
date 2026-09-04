@@ -88,9 +88,6 @@ Keep the key server-side. Never put it in `src/`, commit it, or expose it throug
 ```bash
 npm run dev
 ```
-
-Visit [http://localhost:3000](http://localhost:3000).
-
 ### Production build
 
 ```bash
