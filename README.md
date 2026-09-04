@@ -4,9 +4,14 @@
 
 TruthLens is an evidence-first verification workspace for claims, images, PDFs, and documents. It uses Gemini for multimodal analysis, discovers relevant public sources, compares supporting and contradicting evidence, and presents a calibrated verdict instead of an unexplained yes-or-no answer.
 
+## Live Demo
+
+Try the deployed application: [TruthLens on Netlify](https://truthlenses.netlify.app/)
+
 ## Contents
 
 - [What it does](#what-it-does)
+- [Live demo](#live-demo)
 - [How it works](#how-it-works)
 - [Quick start](#quick-start)
 - [API reference](#api-reference)
@@ -177,6 +182,10 @@ Configure these production settings:
 | Request sizing | Allow requests up to 40 MB if supporting the current upload limit |
 
 Before release, verify the health endpoint, a text check, an image/document check, API quota behavior, and error handling. Do not deploy `.env`, `node_modules/`, or local `dist/` output from source control.
+
+## Project Review
+
+The current production deployment is available for review at [truthlenses.netlify.app](https://truthlenses.netlify.app/). You can test text verification, supported uploads, verdict explanations, evidence sources, local history, and theme switching directly in the live application.
 
 ## Development
 
