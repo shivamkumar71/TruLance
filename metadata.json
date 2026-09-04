@@ -1,0 +1,8 @@
+{
+  "name": "Remix TruthLens",
+  "description": "Minimal, clean AI verification tool to verify claims, screenshots, images, PDFs, and text before you trust.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

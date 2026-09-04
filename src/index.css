@@ -1,0 +1,54 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  :root {
+    --bg-page: #f8fafc;
+    --card-bg: #ffffff;
+    --card-border: #e2e8f0;
+    --text-primary: #0f172a;
+    --text-secondary: #475569;
+    --text-muted: #94a3b8;
+    --brand-primary: #2563eb;
+    --brand-hover: #1d4ed8;
+  }
+
+  .dark {
+    --bg-page: #0b1120;
+    --card-bg: #111827;
+    --card-border: #1f2937;
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --brand-primary: #3b82f6;
+    --brand-hover: #60a5fa;
+  }
+
+  * {
+    border-color: var(--card-border);
+  }
+
+  body {
+    background-color: var(--bg-page);
+    color: var(--text-primary);
+    transition: background-color 0.25s ease, color 0.25s ease;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+}
+
+/* Custom smooth scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.25);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.4);
+}
