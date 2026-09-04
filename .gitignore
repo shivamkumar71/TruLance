@@ -6,3 +6,26 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Local editor and operating-system files
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+
+# Local caches and generated reports
+.cache/
+.turbo/
+*.tsbuildinfo
+*.tgz
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Local credentials and certificates
+*.pem
+*.key
+
+# Hosting-provider output
+.netlify/
+.vercel/
