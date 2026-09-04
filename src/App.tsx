@@ -110,9 +110,15 @@ function MainApp() {
       });
 
       if (!response.ok) {
-        const errJson = await response.json().catch(() => null);
+        const errorBody = await response.text().catch(() => "");
+        let errorMessage = "";
+        try {
+          errorMessage = JSON.parse(errorBody)?.error || "";
+        } catch {
+          errorMessage = errorBody.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+        }
         throw new Error(
-          errJson?.error || `Verification request failed (${response.status}). Please try again.`
+          errorMessage || `Verification request failed (${response.status}). Please try again.`
         );
       }
 
