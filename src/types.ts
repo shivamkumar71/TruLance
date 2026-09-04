@@ -14,7 +14,32 @@ export type SourceCategory =
   | "Research"
   | "Historical Context"
   | "Document"
+  | "Blog / Analysis"
   | "Other";
+
+export type AIDetectionStatus =
+  | "AI-Generated"
+  | "Likely AI-Generated"
+  | "Likely Human / Authentic"
+  | "Human-Authored"
+  | "Uncertain / Mixed";
+
+export interface AIDetectionSignal {
+  indicator: string;
+  detected: boolean;
+  confidence: "High" | "Medium" | "Low";
+  description: string;
+}
+
+export interface AIDetectionAssessment {
+  status: AIDetectionStatus;
+  isAIGenerated: boolean;
+  aiProbability: number; // 0 - 100%
+  confidence: number; // 0 - 100%
+  explanation: string;
+  signals: AIDetectionSignal[];
+  mediaType: "text" | "image" | "pdf" | "document";
+}
 
 export type SourceRelationship = "SUPPORTS" | "CONTRADICTS" | "CONTEXT" | "NEUTRAL";
 
@@ -173,6 +198,7 @@ export interface VerificationResult {
   documentAnalysis?: DocumentAnalysisInfo;
   documentAssessment?: DocumentAnalysisInfo;
   searchTransparency?: SearchTransparency;
+  aiDetection?: AIDetectionAssessment;
   analyzedAt: string;
   contentType?: "text" | "image" | "pdf" | "document";
 }
@@ -205,5 +231,6 @@ export interface HistoryItem {
   sourcesCount: number;
   timestamp: string;
   contentType: "text" | "image" | "pdf" | "document";
+  aiDetection?: AIDetectionAssessment;
   result: VerificationResult;
 }

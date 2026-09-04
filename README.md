@@ -151,13 +151,26 @@ Do not submit confidential, regulated, or personally identifiable material unles
 
 TruthLens requires a Node-compatible server runtime. A static-only deployment cannot safely serve `/api/verify` because the Gemini credential must remain private.
 
+### Vercel
+
+This repository includes [`vercel.json`](vercel.json) and [`api/index.ts`](api/index.ts) for Vercel's Node.js serverless runtime.
+
+1. Push the repository to GitHub.
+2. In Vercel, choose **Add New Project** and import `shivamkumar71/TruLance`.
+3. Keep the detected framework as Vite, or set the build command to `npm run build`.
+4. Add `GEMINI_API_KEY` under **Settings > Environment Variables** for Preview and Production. Paste the value directly into Vercel; do not commit `.env`.
+5. Deploy the project.
+6. Confirm `https://<your-project>.vercel.app/api/health` returns a JSON response with `"status": "ok"`.
+
+Vercel serves the built frontend from `dist/` and routes `/api/*` to the Express function. Do not set `npm start` as a Vercel deployment command; Vercel manages the function runtime.
+
 Configure these production settings:
 
 | Setting | Requirement |
 | --- | --- |
 | Runtime | Node.js 18 or newer |
 | Build command | `npm run build` |
-| Start command | `npm start` |
+| Start command | `npm start` for a traditional Node host; Vercel manages this automatically |
 | Secret | `GEMINI_API_KEY` in the host's protected environment settings |
 | Health check | `GET /api/health` |
 | Request sizing | Allow requests up to 40 MB if supporting the current upload limit |
@@ -188,6 +201,7 @@ Recommended change loop:
 ```text
 .
 ├── assets/                 # Static assets
+├── api/index.ts            # Vercel serverless function entry point
 ├── src/
 │   ├── components/         # Views and reusable UI components
 │   ├── context/            # Shared React context providers
@@ -198,6 +212,7 @@ Recommended change loop:
 ├── server.ts               # Express API, Gemini orchestration, and Vite host
 ├── index.html              # Browser document entry point
 ├── package.json            # Scripts and dependencies
+├── vercel.json              # Vercel build, function, and rewrite configuration
 ├── tsconfig.json           # TypeScript configuration
 └── vite.config.ts          # Vite configuration
 ```

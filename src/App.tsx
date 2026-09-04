@@ -296,7 +296,7 @@ function MainApp() {
       </main>
 
       {/* Global Footer */}
-      <Footer onSelectTab={handleTabChange} onOpenLegal={(type) => setLegalModal(type)} />
+      <Footer />
 
       {/* Legal Dialog */}
       <LegalModal type={legalModal} onClose={() => setLegalModal(null)} />

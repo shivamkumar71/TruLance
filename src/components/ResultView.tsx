@@ -25,6 +25,7 @@ import {
 import { VerificationResult, VerificationSource } from "../types";
 import { VerdictBadge } from "./VerdictBadge";
 import { ConfidenceMeter } from "./ConfidenceMeter";
+import { motion, AnimatePresence } from "motion/react";
 
 interface ResultViewProps {
   result: VerificationResult;
@@ -207,19 +208,28 @@ Verified by TruthLens — Evidence First.`;
   };
 
   return (
-    <div className="w-full max-w-3xl mx-auto px-4 py-8 sm:py-10 animate-in fade-in duration-300">
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35, ease: "easeOut" }}
+      className="w-full max-w-3xl mx-auto px-4 py-8 sm:py-10"
+    >
       {/* Top Action Bar */}
       <div className="flex items-center justify-between gap-3 mb-6">
-        <button
+        <motion.button
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
           onClick={onReset}
           id="btn-result-new-check"
           className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:text-slate-900 dark:hover:text-white bg-white dark:bg-[#0b1329] border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 shadow-2xs transition-all cursor-pointer"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
           <span>New Check</span>
-        </button>
+        </motion.button>
 
-        <button
+        <motion.button
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
           onClick={handleCopy}
           id="btn-result-copy-report"
           className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-white dark:bg-[#0b1329] border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 transition-colors shadow-2xs cursor-pointer"
@@ -235,11 +245,11 @@ Verified by TruthLens — Evidence First.`;
               <span>Copy</span>
             </>
           )}
-        </button>
+        </motion.button>
       </div>
 
       {/* Main Verification Report Container */}
-      <div className="bg-white dark:bg-[#0b1329] border border-slate-200/90 dark:border-slate-800 rounded-2xl shadow-xs overflow-hidden mb-6 transition-colors">
+      <div className="bg-white dark:bg-[#0b1329] border border-slate-200/90 dark:border-slate-800 rounded-3xl shadow-lg shadow-slate-900/5 dark:shadow-black/30 overflow-hidden mb-6 transition-colors">
         {/* 1. TOP: VERDICT & CONFIDENCE */}
         <div className="p-6 sm:p-7 border-b border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-900/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
@@ -679,14 +689,16 @@ Verified by TruthLens — Evidence First.`;
 
       {/* Bottom CTA */}
       <div className="flex justify-center">
-        <button
+        <motion.button
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
           onClick={onReset}
-          className="px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-bold shadow-md shadow-blue-500/20 active:scale-[0.98] transition-all cursor-pointer flex items-center gap-2"
+          className="px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-bold shadow-md shadow-blue-500/20 transition-all cursor-pointer flex items-center gap-2"
         >
           <ArrowLeft className="w-4 h-4" />
           <span>Verify Another Claim</span>
-        </button>
+        </motion.button>
       </div>
-    </div>
+    </motion.div>
   );
 };
