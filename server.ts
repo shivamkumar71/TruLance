@@ -950,7 +950,7 @@ function generateStagedQueries(
     }
   }
 
-  const cleanQueries = Array.from(new Set(queries.filter((q) => q && q.trim().length > 3))).slice(0, 6);
+  const cleanQueries = Array.from(new Set(queries.filter((q) => q && q.trim().length > 3))).slice(0, 4);
   return { queries: cleanQueries, claimInfo, temporalInfo };
 }
 
@@ -990,6 +990,7 @@ async function discoverRealWebSources(
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
           Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         },
+        signal: AbortSignal.timeout(7000),
       });
 
       if (res.ok) {
@@ -1046,6 +1047,7 @@ async function discoverRealWebSources(
       )}&limit=3&namespace=0&format=json`;
       const res = await fetch(wikiUrl, {
         headers: { "User-Agent": "TruthLensFactCheck/1.0 (contact@truthlens.org)" },
+        signal: AbortSignal.timeout(5000),
       });
       if (res.ok) {
         const data = await res.json();
