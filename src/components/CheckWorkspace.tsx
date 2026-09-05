@@ -216,7 +216,7 @@ export const CheckWorkspace: React.FC<CheckWorkspaceProps> = ({
     isLoading || (activeMode === "text" ? claimText.trim().length === 0 : uploadedFile === null);
 
   return (
-    <div className="w-full max-w-3xl mx-auto px-4 py-8 sm:py-12 relative">
+    <div className="page-surface w-full max-w-3xl mx-auto px-4 py-8 sm:py-12 relative">
       {/* Subtle Background Glow */}
       <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-blue-500/10 dark:bg-blue-600/10 rounded-full blur-3xl pointer-events-none -z-10" />
 

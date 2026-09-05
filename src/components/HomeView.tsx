@@ -15,7 +15,6 @@ import {
   Image as ImageIcon,
   FileSpreadsheet,
 } from "lucide-react";
-import { HeroVerificationVisual } from "./HeroVerificationVisual";
 
 interface HomeViewProps {
   onNavigateToCheck: () => void;
@@ -30,75 +29,65 @@ export const HomeView: React.FC<HomeViewProps> = ({
   return (
     <div className="w-full flex flex-col items-center">
       {/* 1. HERO SECTION */}
-      <section className="w-full max-w-7xl mx-auto px-4 sm:px-8 pt-8 pb-16 lg:pt-16 lg:pb-24">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-14 items-center">
-          {/* Left Column */}
-          <div className="lg:col-span-6 flex flex-col items-start text-left">
-            {/* Pill Badge */}
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-500/10 dark:bg-blue-500/15 border border-blue-500/20 text-blue-600 dark:text-blue-400 text-xs font-semibold mb-6 tracking-wide shadow-2xs">
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Evidence-First Verification Platform</span>
+      <section className="hero-surface relative isolate w-full overflow-hidden">
+        <div className="hero-orbit hero-orbit-one" aria-hidden="true" />
+        <div className="hero-orbit hero-orbit-two" aria-hidden="true" />
+        <div className="relative z-10 mx-auto grid min-h-[610px] w-full max-w-7xl items-center gap-12 px-4 py-20 sm:px-8 lg:grid-cols-12 lg:gap-10 lg:py-24">
+          <div className="max-w-4xl text-left lg:col-span-7">
+            <div className="hero-reveal mb-7 inline-flex items-center gap-2 rounded-full border border-teal-400/25 bg-teal-400/10 px-3.5 py-1.5 text-xs font-semibold tracking-wide text-teal-300">
+              <span className="h-1.5 w-1.5 rounded-full bg-teal-300 shadow-[0_0_12px_rgba(94,234,212,0.9)]" />
+              Evidence-first verification
             </div>
-
-            {/* Headline */}
-            <h1 className="text-4xl sm:text-5xl lg:text-[56px] font-extrabold text-slate-900 dark:text-white tracking-tight leading-[1.12] mb-6">
-              Check what’s true.
+            <h1 className="hero-reveal hero-delay-one max-w-4xl text-5xl font-bold leading-[0.98] tracking-[-0.04em] text-slate-50 sm:text-7xl lg:text-[88px]">
+              Know what’s true.
+              <br />
+              <span className="text-teal-300">Before you share it.</span>
             </h1>
-
-            {/* Subheadline */}
-            <p className="text-base sm:text-lg text-slate-600 dark:text-slate-300 leading-relaxed max-w-xl mb-8 font-normal">
-              Verify claims, images and documents using evidence from trusted sources.
+            <p className="hero-reveal hero-delay-two mt-8 max-w-2xl text-base leading-8 text-slate-300 sm:text-xl">
+              AI-powered verification for claims, news, images and documents, backed by evidence instead of guesswork.
             </p>
-
-            {/* Primary & Secondary CTAs */}
-            <div className="flex flex-wrap items-center gap-3 sm:gap-4 mb-10 w-full sm:w-auto">
-              <button
-                type="button"
-                onClick={onNavigateToCheck}
-                id="btn-hero-check-claim"
-                className="px-7 py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm transition-all shadow-md shadow-blue-500/20 hover:shadow-blue-500/30 active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2"
-              >
-                <span>Check a Claim</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
-
-              <button
-                type="button"
-                onClick={onNavigateToHowItWorks}
-                id="btn-hero-how-it-works"
-                className="px-6 py-3.5 rounded-xl border border-slate-300 dark:border-slate-700 hover:border-slate-400 dark:hover:border-slate-600 text-slate-700 dark:text-slate-300 font-semibold text-sm transition-colors hover:bg-slate-100/50 dark:hover:bg-slate-800/50 cursor-pointer"
-              >
-                How It Works
-              </button>
+            <div className="hero-reveal hero-delay-three mt-9 flex flex-wrap gap-3">
+              {[
+                { icon: FileText, label: "Text" },
+                { icon: ImageIcon, label: "Images" },
+                { icon: FileCheck, label: "Documents" },
+                { icon: Shield, label: "Source-backed" },
+              ].map(({ icon: Icon, label }) => (
+                <span key={label} className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.06] px-3.5 py-2.5 text-sm text-slate-200 backdrop-blur-sm">
+                  <Icon className="h-4 w-4 text-teal-300" />
+                  {label}
+                </span>
+              ))}
             </div>
-
-            {/* Input Capability Indicators */}
-            <div className="flex flex-wrap items-center gap-y-2 gap-x-5 text-xs text-slate-500 dark:text-slate-400 font-medium pt-2 border-t border-slate-200/80 dark:border-slate-800/80 w-full">
-              <span className="text-[11px] uppercase tracking-wider text-slate-400 dark:text-slate-500 font-bold mr-1">
-                Supported:
-              </span>
-              <div className="flex items-center gap-1.5">
-                <FileText className="w-3.5 h-3.5 text-blue-500" />
-                <span>Text</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <ImageIcon className="w-3.5 h-3.5 text-blue-500" />
-                <span>Image</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <FileCheck className="w-3.5 h-3.5 text-blue-500" />
-                <span>PDF</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <FileSpreadsheet className="w-3.5 h-3.5 text-blue-500" />
-                <span>Document</span>
-              </div>
+            <div className="hero-reveal hero-delay-four mt-12 flex flex-wrap items-center gap-5">
+              <button type="button" onClick={onNavigateToCheck} id="btn-hero-check-claim" className="inline-flex items-center gap-2 rounded-xl bg-teal-400 px-7 py-3.5 text-sm font-bold text-slate-950 shadow-[0_10px_30px_rgba(45,212,191,0.22)] transition hover:-translate-y-0.5 hover:bg-teal-300">
+                Try the live demo <ArrowRight className="h-4 w-4" />
+              </button>
+              <button type="button" onClick={onNavigateToHowItWorks} id="btn-hero-how-it-works" className="text-sm font-semibold text-slate-300 transition hover:text-teal-300">
+                See how it works <span aria-hidden="true">→</span>
+              </button>
             </div>
           </div>
 
-          {/* Right Column: Hero Visual (Claim → Research → Evidence → Verdict) */}
-          <div className="lg:col-span-6 w-full flex items-center justify-center">
-            <HeroVerificationVisual />
+          <div className="hero-reveal hero-delay-two relative lg:col-span-5" aria-label="A researcher reviewing evidence on a laptop">
+            <div className="hero-image-glow" aria-hidden="true" />
+            <div className="hero-image-frame">
+              <img
+                src="https://images.unsplash.com/photo-1553877522-43269d4ea984?auto=format&fit=crop&w=1100&q=85"
+                alt="Research team reviewing information on a laptop"
+                className="hero-image"
+                loading="eager"
+              />
+              <div className="hero-image-wash" aria-hidden="true" />
+              <div className="hero-image-label hero-image-label-top">
+                <span className="hero-image-dot" />
+                Evidence in context
+              </div>
+              <div className="hero-image-caption">
+                <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-teal-200">TruthLens method</span>
+                <span className="mt-1 block text-sm font-semibold text-white">Read the evidence. Then decide.</span>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -339,31 +328,6 @@ export const HomeView: React.FC<HomeViewProps> = ({
         </div>
       </section>
 
-      {/* 5. FINAL CTA */}
-      <section className="w-full max-w-7xl mx-auto px-4 sm:px-8 py-20">
-        <div className="p-8 sm:p-12 lg:p-16 rounded-3xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white text-center flex flex-col items-center justify-center shadow-xl shadow-blue-600/20 relative overflow-hidden">
-          <div className="absolute -right-16 -top-16 w-64 h-64 bg-white/10 rounded-full blur-2xl pointer-events-none" />
-          <div className="absolute -left-16 -bottom-16 w-64 h-64 bg-black/10 rounded-full blur-2xl pointer-events-none" />
-
-          <h2 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight mb-4 max-w-xl">
-            Check what’s true.
-          </h2>
-
-          <p className="text-sm sm:text-base text-blue-100 max-w-md mb-8 leading-relaxed font-normal">
-            Verify claims, images and documents using evidence from trusted sources.
-          </p>
-
-          <button
-            type="button"
-            onClick={onNavigateToCheck}
-            id="btn-final-cta-start"
-            className="px-8 py-4 rounded-xl bg-white text-blue-700 hover:bg-blue-50 font-bold text-sm sm:text-base shadow-lg transition-all active:scale-[0.98] cursor-pointer flex items-center gap-2"
-          >
-            <span>Check a Claim</span>
-            <ArrowRight className="w-4 h-4" />
-          </button>
-        </div>
-      </section>
     </div>
   );
 };

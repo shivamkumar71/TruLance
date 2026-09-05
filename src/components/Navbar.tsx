@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Shield, Menu, X, PlusCircle, Globe, Sparkles } from "lucide-react";
+import { Shield, Menu, X } from "lucide-react";
 import { ThemeToggle } from "./ThemeToggle";
 
 interface NavbarProps {
@@ -25,7 +25,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   };
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-slate-200/80 dark:border-slate-800/80 bg-white/90 dark:bg-[#070d18]/90 backdrop-blur-md transition-colors">
+    <header className="site-nav sticky top-0 z-40 w-full border-b border-slate-200/80 dark:border-slate-800/80 bg-white/90 dark:bg-[#070d18]/90 backdrop-blur-md transition-colors">
       <div className="max-w-7xl mx-auto px-4 sm:px-8 h-16 sm:h-18 flex items-center justify-between">
         {/* Brand Logo & Name */}
         <button
@@ -108,29 +108,8 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Right Controls */}
         <div className="flex items-center gap-3 sm:gap-4">
-          {/* Active result button if user is in another tab */}
-          {hasActiveResult && (
-            <button
-              onClick={onNewCheck}
-              id="btn-header-new-check"
-              className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 text-xs font-semibold hover:bg-blue-100 dark:hover:bg-blue-900/60 transition-colors cursor-pointer"
-            >
-              <PlusCircle className="w-3.5 h-3.5" />
-              <span>New Check</span>
-            </button>
-          )}
-
           {/* Dark / Light Toggle */}
           <ThemeToggle />
-
-          {/* Get Started / Check Claim Button */}
-          <button
-            onClick={() => handleNavClick("check")}
-            id="btn-nav-get-started"
-            className="hidden sm:inline-flex items-center justify-center px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-semibold transition-all shadow-sm hover:shadow-blue-500/20 active:scale-[0.98] cursor-pointer"
-          >
-            Check a Claim
-          </button>
 
           {/* Mobile Hamburger Toggle */}
           <button
@@ -156,16 +135,6 @@ export const Navbar: React.FC<NavbarProps> = ({
             }`}
           >
             Home
-          </button>
-          <button
-            onClick={() => handleNavClick("check")}
-            className={`w-full text-left px-3 py-2 rounded-lg ${
-              currentTab === "check"
-                ? "bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 font-semibold"
-                : "text-slate-700 dark:text-slate-300"
-            }`}
-          >
-            Check a Claim
           </button>
           <button
             onClick={() => handleNavClick("how-it-works")}
@@ -213,14 +182,6 @@ export const Navbar: React.FC<NavbarProps> = ({
             About
           </button>
 
-          <div className="pt-2">
-            <button
-              onClick={() => handleNavClick("check")}
-              className="w-full py-2.5 rounded-xl bg-blue-600 text-white font-semibold flex items-center justify-center text-sm shadow-sm"
-            >
-              Start Fact Checking
-            </button>
-          </div>
         </div>
       )}
     </header>

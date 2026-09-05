@@ -30,9 +30,14 @@ app.use(express.urlencoded({ extended: true, limit: "40mb" }));
 let aiClient: GoogleGenAI | null = null;
 function getAI(): GoogleGenAI {
   if (!aiClient) {
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = process.env.GEMINI_API_KEY?.trim().replace(/^['"]|['"]$/g, "");
     if (!apiKey) {
       throw new Error("GEMINI_API_KEY environment variable is missing.");
+    }
+    if (!apiKey.startsWith("AIza")) {
+      throw new Error(
+        "GEMINI_API_KEY is not a valid Google AI Studio API key. Create a Gemini API key in Google AI Studio and replace GEMINI_API_KEY in .env."
+      );
     }
     aiClient = new GoogleGenAI({
       apiKey,
@@ -55,7 +60,8 @@ function normalizeVerdict(val?: string): VerdictType {
   const upper = (val || "").toUpperCase().trim();
   if (upper === "TRUE" || upper.includes("VERIFIED TRUE")) return "TRUE";
   if (upper.includes("LIKELY TRUE")) return "LIKELY TRUE";
-  if (upper === "MIXED" || upper.includes("PARTIAL") || upper.includes("MISLEADING")) return "MIXED";
+  if (upper === "MISLEADING" || upper.includes("MISLEADING")) return "MISLEADING";
+  if (upper === "MIXED" || upper.includes("PARTIAL")) return "MIXED";
   if (upper.includes("LIKELY FALSE")) return "LIKELY FALSE";
   if (upper.includes("FALSE") || upper.includes("DEBUNKED")) return "FALSE";
   return "UNVERIFIED";
@@ -1432,6 +1438,7 @@ OUTPUT JSON FORMAT:
   "confidenceLabel": "Very High" | "High" | "Moderate" | "Low" | "Insufficient",
   "evidenceStrength": "Very High Evidence" | "High Evidence" | "Moderate Evidence" | "Limited Evidence" | "Insufficient Evidence",
   "why": "2-3 concise, neutral, evidence-grounded sentences explaining the conclusion",
+  "truthCorrection": "For FALSE, LIKELY FALSE, MIXED, or MISLEADING claims: 1-2 concise sentences stating the accurate fact or missing context. For TRUE claims, use null.",
   "evidence": ["Key evidence statement 1", "Key evidence statement 2"],
   "supportingEvidence": ["Direct supporting evidence point 1"],
   "contradictingEvidence": ["Direct contradicting or refuting point if any"],
@@ -1782,6 +1789,7 @@ OUTPUT JSON FORMAT:
       (arr || []).map(_stripUrls).filter((s) => s.length > 0);
 
     parsedResult.why = _stripUrls(parsedResult.why || "");
+    parsedResult.truthCorrection = _stripUrls(parsedResult.truthCorrection || "");
     parsedResult.bottomLine = _stripUrls(parsedResult.bottomLine || "");
     parsedResult.evidence = _sanitizeArr(parsedResult.evidence);
     parsedResult.supportingEvidence = _sanitizeArr(parsedResult.supportingEvidence);
@@ -1972,8 +1980,16 @@ OUTPUT JSON FORMAT:
     return res.json(parsedResult);
   } catch (error: any) {
     console.error("Verification error:", error?.message || error);
+    const errorMessage = String(error?.message || "");
+    const isAuthError =
+      errorMessage.includes("401") ||
+      errorMessage.includes("UNAUTHENTICATED") ||
+      errorMessage.includes("invalid authentication credentials") ||
+      errorMessage.includes("not a valid Google AI Studio API key");
     return res.status(500).json({
-      error: error.message || "An unexpected error occurred during verification.",
+      error: isAuthError
+        ? "Verification is temporarily unavailable because GEMINI_API_KEY is invalid or expired. Add a valid Google AI Studio Gemini API key to .env, then restart the server."
+        : errorMessage || "An unexpected error occurred during verification.",
     });
   }
 });

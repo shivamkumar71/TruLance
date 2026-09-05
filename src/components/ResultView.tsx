@@ -156,6 +156,7 @@ Why: ${result.why}
 ${result.supportingEvidence && result.supportingEvidence.length > 0 ? `Supporting Evidence:\n${result.supportingEvidence.map((e) => `• ${e}`).join("\n")}\n\n` : ""}${result.contradictingEvidence && result.contradictingEvidence.length > 0 ? `Contradicting Evidence:\n${result.contradictingEvidence.map((e) => `• ${e}`).join("\n")}\n\n` : ""}${result.contextEvidence && result.contextEvidence.length > 0 ? `Important Context:\n${result.contextEvidence.map((e) => `• ${e}`).join("\n")}\n\n` : ""}Sources:
 ${result.sources?.map((s) => `• ${s.publisher || "Source"}: "${s.title}" ${s.url ? `(${s.url})` : "[Exact source page could not be verified]"}`).join("\n")}
 
+${result.truthCorrection ? `What the evidence says instead:\n${result.truthCorrection}\n\n` : ""}
 Bottom Line: ${result.bottomLine || result.why}
 
 Verified by TruthLens — Evidence First.`;
@@ -212,7 +213,7 @@ Verified by TruthLens — Evidence First.`;
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, ease: "easeOut" }}
-      className="w-full max-w-3xl mx-auto px-4 py-8 sm:py-10"
+      className="page-surface w-full max-w-3xl mx-auto px-4 py-8 sm:py-10"
     >
       {/* Top Action Bar */}
       <div className="flex items-center justify-between gap-3 mb-6">
@@ -299,6 +300,17 @@ Verified by TruthLens — Evidence First.`;
             {result.why}
           </p>
         </div>
+
+        {result.truthCorrection && result.verdict !== "TRUE" && result.verdict !== "LIKELY TRUE" && (
+          <div className="p-6 sm:p-7 border-b border-teal-200/70 dark:border-teal-900/60 bg-teal-50/60 dark:bg-teal-950/20">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-teal-700 dark:text-teal-300 block mb-2">
+              What the evidence says instead
+            </span>
+            <p className="text-sm sm:text-base text-teal-950 dark:text-teal-100 leading-relaxed font-semibold">
+              {result.truthCorrection}
+            </p>
+          </div>
+        )}
 
         {/* 4. EVIDENCE (Supporting, Contradicting, Important Context) */}
         <div className="p-6 sm:p-7 border-b border-slate-100 dark:border-slate-800/80 bg-slate-50/20 dark:bg-slate-950/10 space-y-4">

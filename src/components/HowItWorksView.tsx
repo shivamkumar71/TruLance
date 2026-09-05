@@ -8,7 +8,7 @@ interface HowItWorksViewProps {
 
 export const HowItWorksView: React.FC<HowItWorksViewProps> = ({ onBack, onNewCheck }) => {
   return (
-    <div className="w-full max-w-3xl mx-auto px-4 py-8 sm:py-10 animate-in fade-in duration-200">
+    <div className="page-surface w-full max-w-3xl mx-auto px-4 py-8 sm:py-10 animate-in fade-in duration-200">
       {/* Back button */}
       <button
         onClick={onBack}

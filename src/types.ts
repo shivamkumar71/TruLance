@@ -178,6 +178,7 @@ export interface VerificationResult {
   verificationDifficulty?: VerificationDifficulty;
   positiveEvidenceFound?: boolean;
   why: string;
+  truthCorrection?: string;
   evidence: string[];
   supportingEvidence?: string[];
   contradictingEvidence?: string[];

@@ -170,7 +170,7 @@ function MainApp() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f4f7fb] dark:bg-[#070d18] text-slate-900 dark:text-slate-100 flex flex-col justify-between selection:bg-blue-500/20 selection:text-blue-700 dark:selection:text-blue-300 font-sans transition-colors duration-200">
+    <div className="app-shell min-h-screen text-slate-900 dark:text-slate-100 flex flex-col justify-between selection:bg-teal-500/20 selection:text-teal-700 dark:selection:text-teal-200 font-sans transition-colors duration-200">
       {/* Sticky Top Navigation */}
       <Navbar
         currentTab={currentTab}

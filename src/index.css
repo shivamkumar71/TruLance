@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap');
 @import "tailwindcss";
 
 @custom-variant dark (&:where(.dark, .dark *));
@@ -33,8 +34,133 @@
     background-color: var(--bg-page);
     color: var(--text-primary);
     transition: background-color 0.25s ease, color 0.25s ease;
+    font-family: "DM Sans", sans-serif;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
+
+  h1, h2, h3, h4, button {
+    font-family: "Manrope", "DM Sans", sans-serif;
+  }
+}
+
+.app-shell {
+  background: #f4f8f8;
+  background-image: radial-gradient(circle at 10% 0%, rgba(45, 212, 191, 0.08), transparent 28%), linear-gradient(rgba(15, 23, 42, 0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(15, 23, 42, 0.025) 1px, transparent 1px);
+  background-size: auto, 52px 52px, 52px 52px;
+}
+
+.dark .app-shell {
+  background: #07111d;
+  background-image: radial-gradient(circle at 10% 0%, rgba(45, 212, 191, 0.1), transparent 28%), linear-gradient(rgba(148, 163, 184, 0.035) 1px, transparent 1px), linear-gradient(90deg, rgba(148, 163, 184, 0.035) 1px, transparent 1px);
+  background-size: auto, 52px 52px, 52px 52px;
+}
+
+.site-nav {
+  box-shadow: 0 1px 0 rgba(45, 212, 191, 0.08), 0 12px 30px rgba(15, 23, 42, 0.04);
+}
+
+.dark .site-nav {
+  box-shadow: 0 1px 0 rgba(45, 212, 191, 0.12), 0 12px 30px rgba(0, 0, 0, 0.12);
+}
+
+/* Keep the established component markup, but bring its legacy blue accents into the new teal system. */
+.app-shell .bg-blue-600 { background-color: #2dd4bf; color: #07111d; }
+.app-shell .hover\:bg-blue-700:hover { background-color: #5eead4; }
+.app-shell .text-blue-600, .app-shell .text-blue-700 { color: #0f766e; }
+.dark .app-shell .text-blue-400, .dark .app-shell .text-blue-300 { color: #5eead4; }
+.dark .app-shell .text-blue-600, .dark .app-shell .text-blue-700 { color: #5eead4; }
+.app-shell .border-blue-500, .app-shell .border-blue-200 { border-color: rgba(45, 212, 191, 0.35); }
+.app-shell .bg-blue-50 { background-color: rgba(45, 212, 191, 0.1); }
+.dark .app-shell .bg-blue-950\/60, .dark .app-shell .bg-blue-950\/50, .dark .app-shell .bg-blue-950\/40 { background-color: rgba(13, 148, 136, 0.18); }
+.page-surface .bg-white { background-color: rgba(255, 255, 255, 0.72); backdrop-filter: blur(14px); }
+.dark .page-surface .bg-white { background-color: rgba(11, 19, 41, 0.78); }
+
+.page-surface {
+  min-height: 100%;
+  animation: page-enter 0.45s both cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.surface-card {
+  background: rgba(255, 255, 255, 0.76);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.06);
+  backdrop-filter: blur(16px);
+}
+
+.dark .surface-card {
+  background: rgba(11, 19, 41, 0.78);
+  border-color: rgba(148, 163, 184, 0.12);
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.2);
+}
+
+@keyframes page-enter {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.hero-surface {
+  background: #07111d;
+  background-image: linear-gradient(rgba(148, 163, 184, 0.055) 1px, transparent 1px), linear-gradient(90deg, rgba(148, 163, 184, 0.055) 1px, transparent 1px), radial-gradient(circle at 82% 20%, rgba(45, 212, 191, 0.14), transparent 32%);
+  background-size: 59px 59px, 59px 59px, auto;
+}
+
+.hero-orbit {
+  position: absolute;
+  border: 1px solid rgba(45, 212, 191, 0.22);
+  border-radius: 9999px;
+  pointer-events: none;
+}
+
+.hero-orbit-one { width: 540px; height: 540px; right: -95px; top: -205px; }
+.hero-orbit-two { width: 440px; height: 440px; right: -45px; top: -155px; opacity: 0.6; }
+
+.hero-image-glow {
+  position: absolute;
+  inset: 12% -8% -10% 8%;
+  border-radius: 2rem;
+  background: rgba(45, 212, 191, 0.2);
+  filter: blur(42px);
+  transform: rotate(4deg);
+}
+
+.hero-image-frame {
+  position: relative;
+  min-height: 390px;
+  overflow: hidden;
+  border: 1px solid rgba(153, 246, 228, 0.28);
+  border-radius: 1.75rem;
+  background: #102431;
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.28), 0 0 0 8px rgba(255, 255, 255, 0.035);
+  transform: rotate(1.5deg);
+  transition: transform 0.5s ease, box-shadow 0.5s ease;
+}
+
+.hero-image-frame:hover {
+  transform: rotate(0deg) translateY(-4px);
+  box-shadow: 0 34px 80px rgba(0, 0, 0, 0.34), 0 0 0 8px rgba(45, 212, 191, 0.06);
+}
+
+.hero-image { width: 100%; height: 390px; object-fit: cover; filter: saturate(0.8) contrast(1.05); }
+.hero-image-wash { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(7, 17, 29, 0.06) 25%, rgba(7, 17, 29, 0.86) 100%); }
+.hero-image-label { position: absolute; display: inline-flex; align-items: center; gap: 0.5rem; border: 1px solid rgba(153, 246, 228, 0.25); border-radius: 999px; background: rgba(7, 17, 29, 0.72); padding: 0.55rem 0.8rem; color: #ccfbf1; font-size: 0.72rem; font-weight: 600; backdrop-filter: blur(12px); }
+.hero-image-label-top { top: 1.25rem; left: 1.25rem; }
+.hero-image-dot { width: 0.45rem; height: 0.45rem; border-radius: 999px; background: #5eead4; box-shadow: 0 0 10px rgba(94, 234, 212, 0.9); }
+.hero-image-caption { position: absolute; right: 1.25rem; bottom: 1.25rem; left: 1.25rem; }
+
+.hero-reveal { animation: hero-reveal 0.7s both cubic-bezier(0.22, 1, 0.36, 1); }
+.hero-delay-one { animation-delay: 0.08s; }
+.hero-delay-two { animation-delay: 0.16s; }
+.hero-delay-three { animation-delay: 0.24s; }
+.hero-delay-four { animation-delay: 0.32s; }
+
+@keyframes hero-reveal {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 1023px) {
+  .hero-image-frame, .hero-image { min-height: 300px; height: 300px; }
+  .hero-image-frame { max-width: 620px; transform: rotate(0.8deg); }
 }
 
 /* Custom smooth scrollbar */
