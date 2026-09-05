@@ -34,11 +34,6 @@ function getAI(): GoogleGenAI {
     if (!apiKey) {
       throw new Error("GEMINI_API_KEY environment variable is missing.");
     }
-    if (!apiKey.startsWith("AIza")) {
-      throw new Error(
-        "GEMINI_API_KEY is not a valid Google AI Studio API key. Create a Gemini API key in Google AI Studio and replace GEMINI_API_KEY in .env."
-      );
-    }
     aiClient = new GoogleGenAI({
       apiKey,
       httpOptions: {
@@ -78,6 +73,56 @@ function normalizeCategory(cat?: string, isHistorical?: boolean): SourceCategory
   if (normalized.includes("blog") || normalized.includes("substack") || normalized.includes("analysis") || normalized.includes("commentary") || normalized.includes("column")) return "Blog / Analysis";
   if (normalized.includes("doc")) return "Document";
   return "Other";
+}
+
+function parseModelJson(rawText: string): VerificationResult {
+  const cleaned = rawText
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+
+  try {
+    return JSON.parse(cleaned) as VerificationResult;
+  } catch {
+    let start = -1;
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+
+    for (let index = 0; index < cleaned.length; index += 1) {
+      const character = cleaned[index];
+
+      if (inString) {
+        if (escaped) {
+          escaped = false;
+        } else if (character === "\\") {
+          escaped = true;
+        } else if (character === '"') {
+          inString = false;
+        }
+        continue;
+      }
+
+      if (character === '"') {
+        inString = true;
+      } else if (character === "{") {
+        if (start === -1) start = index;
+        depth += 1;
+      } else if (character === "}" && start !== -1) {
+        depth -= 1;
+        if (depth === 0) {
+          try {
+            return JSON.parse(cleaned.slice(start, index + 1)) as VerificationResult;
+          } catch {
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  throw new Error("Unable to parse verification response as structured JSON.");
 }
 
 function classifySourceTier(
@@ -337,11 +382,15 @@ function calibrateEvidenceScoreAndStrength(
   ).length;
 
   // RULE 1: INSUFFICIENT EVIDENCE / UNVERIFIED / NO EMPIRICAL CLAIM
+  const hasValidatedNegativeEvidence =
+    (verdict === "FALSE" || verdict === "LIKELY FALSE" || verdict === "MISLEADING" || verdict === "MIXED") &&
+    sources.length > 0;
+
   if (
-    !positiveEvidenceFound ||
-    verdict === "UNVERIFIED" ||
-    claimType === "No Verifiable Claim" ||
-    (directSupportingSources === 0 && directContradictingSources === 0 && !hasTier1Primary && !hasTier2NewsOrFactCheck)
+    ((!positiveEvidenceFound && !hasValidatedNegativeEvidence) ||
+      verdict === "UNVERIFIED" ||
+      claimType === "No Verifiable Claim" ||
+      (sources.length === 0 && directSupportingSources === 0 && directContradictingSources === 0 && !hasTier1Primary && !hasTier2NewsOrFactCheck))
   ) {
     const unverifiedScore = Math.max(12, Math.min(28, 16 + (claimHash % 12)));
     return {
@@ -1145,6 +1194,63 @@ async function discoverRealWebSources(
       console.warn("Live web search warning:", err);
     }
 
+    // Google News RSS is a lightweight fallback when DuckDuckGo blocks server-side HTML.
+    // It returns concrete article URLs without requiring another API credential.
+    if (currentQueryResults.length < 4) {
+      try {
+        const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(cleanQ)}&hl=en-US&gl=US&ceid=US:en`;
+        const rssResponse = await fetch(rssUrl, {
+          headers: { "User-Agent": "TruthLensFactCheck/1.0" },
+          signal: AbortSignal.timeout(7000),
+        });
+
+        if (rssResponse.ok) {
+          const rssXml = await rssResponse.text();
+          const itemMatches = rssXml.match(/<item>[\s\S]*?<\/item>/g) || [];
+          for (const item of itemMatches.slice(0, 8)) {
+            const readTag = (tag: string) => {
+              const match = item.match(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`, "i"));
+              return (match?.[1] || "")
+                .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
+                .replace(/<[^>]+>/g, "")
+                .trim();
+            };
+
+            const title = readTag("title");
+            const url = cleanCanonicalUrl(readTag("link"));
+            const snippet = readTag("description");
+            const publisher = readTag("source") || (url ? extractPublisherFromUrl(url) : "News Source");
+
+            if (!title || !url || seenCanonicalUrls.has(url)) continue;
+
+            const tierInfo = classifySourceTier(url, publisher);
+            const rssCandidate: DiscoveredSource = {
+              title,
+              url,
+              canonicalUrl: url,
+              publisher,
+              snippet,
+              tier: tierInfo.tier,
+              quality: tierInfo.quality,
+            };
+            rssCandidate.relevanceScore = calculateSourceRelevance(
+              rssCandidate,
+              claimInfo.entities,
+              claimInfo.numbers,
+              claimInfo.dates,
+              claimInfo.keywords
+            );
+
+            seenCanonicalUrls.add(url);
+            currentQueryResults.push(rssCandidate);
+            discovered.push(rssCandidate);
+          }
+        }
+      } catch (err) {
+        console.warn("Google News RSS fallback warning:", err);
+      }
+    }
+
     // 2. Wikipedia OpenSearch API for scientific, encyclopedic & historical records
     try {
       const wikiUrl = `https://en.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(
@@ -1597,20 +1703,7 @@ OUTPUT JSON FORMAT:
       );
     }
 
-    let rawText = response.text.trim();
-    rawText = rawText.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim();
-
-    let parsedResult: VerificationResult;
-    try {
-      parsedResult = JSON.parse(rawText);
-    } catch {
-      const match = rawText.match(/\{[\s\S]*\}/);
-      if (match) {
-        parsedResult = JSON.parse(match[0]);
-      } else {
-        throw new Error("Unable to parse verification response as structured JSON.");
-      }
-    }
+    const parsedResult = parseModelJson(response.text);
 
     // Normalize verdict
     parsedResult.verdict = normalizeVerdict(parsedResult.verdict);
@@ -1774,6 +1867,18 @@ OUTPUT JSON FORMAT:
     }
 
     parsedResult.sources = processedSources.slice(0, 5);
+
+    // A definitive verdict must be backed by at least one validated source.
+    // Model-only contradiction text is not enough to call a claim false.
+    const requiresValidatedEvidence = ["FALSE", "LIKELY FALSE", "MISLEADING", "MIXED"].includes(parsedResult.verdict);
+    if (requiresValidatedEvidence && parsedResult.sources.length === 0) {
+      parsedResult.verdict = "UNVERIFIED";
+      parsedResult.truthCorrection = undefined;
+      parsedResult.why =
+        "The available search results did not provide a validated source that directly confirms or refutes this claim.";
+      parsedResult.bottomLine =
+        "This claim cannot responsibly be labelled false or misleading until a direct, reliable source is available.";
+    }
 
     // ── Evidence Text Sanitization ───────────────────────────────────────────
     // Strip any URLs that the AI accidentally injected into evidence text fields.
