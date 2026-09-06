@@ -14,6 +14,7 @@ import {
   CheckCircle2,
   AlertTriangle,
   Info,
+  ShieldCheck,
   Landmark,
   FlaskConical,
   Scale,
@@ -31,6 +32,32 @@ interface ResultViewProps {
   result: VerificationResult;
   onReset: () => void;
 }
+
+const cleanSourceText = (value?: string | null): string => {
+  if (!value) return "";
+
+  const namedEntities: Record<string, string> = {
+    amp: "&",
+    apos: "'",
+    gt: ">",
+    lt: "<",
+    nbsp: " ",
+    quot: '"',
+  };
+
+  return value
+    .replace(/&#(\d+);/g, (_, code: string) => String.fromCodePoint(Number(code)))
+    .replace(/&#x([\da-f]+);/gi, (_, code: string) => String.fromCodePoint(parseInt(code, 16)))
+    .replace(/&([a-z]+);/gi, (match: string, name: string) => namedEntities[name.toLowerCase()] || match)
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+};
+
+const revealVariants = {
+  hidden: { opacity: 0, y: 18 },
+  visible: { opacity: 1, y: 0 },
+};
 
 // Domain Type classification & Authority Favicon component
 const SourceFavicon: React.FC<{ source: VerificationSource }> = ({ source }) => {
@@ -178,6 +205,13 @@ Verified by TruthLens — Evidence First.`;
       result.detailedAnalysis.conflictingEvidence ||
       result.detailedAnalysis.factChecks?.length);
 
+  const normalizedVerdict = result.verdict.toUpperCase();
+  const verdictTone = normalizedVerdict === "TRUE" || normalizedVerdict === "LIKELY TRUE"
+    ? "result-hero-true"
+    : normalizedVerdict === "FALSE" || normalizedVerdict === "LIKELY FALSE" || normalizedVerdict === "MISLEADING"
+    ? "result-hero-false"
+    : "result-hero-neutral";
+
   // Evidence groupings
   const supporting = result.supportingEvidence || [];
   const contradicting = result.contradictingEvidence || [];
@@ -250,14 +284,23 @@ Verified by TruthLens — Evidence First.`;
       </div>
 
       {/* Main Verification Report Container */}
-      <div className="bg-white dark:bg-[#0b1329] border border-slate-200/90 dark:border-slate-800 rounded-3xl shadow-lg shadow-slate-900/5 dark:shadow-black/30 overflow-hidden mb-6 transition-colors">
+      <div className="mb-6 space-y-4">
         {/* 1. TOP: VERDICT & CONFIDENCE */}
-        <div className="p-6 sm:p-7 border-b border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-900/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <motion.div
+          variants={revealVariants}
+          initial="hidden"
+          animate="visible"
+          transition={{ duration: 0.5, ease: "easeOut" }}
+          className={`result-hero-card ${verdictTone} p-6 sm:p-8 rounded-3xl flex flex-col sm:flex-row sm:items-center justify-between gap-6`}
+        >
           <div>
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 block mb-1.5">
-              Verdict
+            <span className="result-eyebrow block mb-2">
+              Verification verdict
             </span>
             <VerdictBadge verdict={result.verdict} size="lg" />
+            <p className="mt-3 max-w-md text-xs text-slate-500 dark:text-slate-400">
+              Calibrated against the available evidence and source agreement.
+            </p>
           </div>
 
           <ConfidenceMeter
@@ -267,11 +310,17 @@ Verified by TruthLens — Evidence First.`;
             claimType={result.claimType}
             verificationDifficulty={result.verificationDifficulty}
           />
-        </div>
+        </motion.div>
 
         {/* 2. CLAIM */}
-        <div className="p-6 sm:p-7 border-b border-slate-100 dark:border-slate-800/80">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 block mb-1.5">
+        <motion.div
+          variants={revealVariants}
+          initial="hidden"
+          animate="visible"
+          transition={{ duration: 0.45, delay: 0.2, ease: "easeOut" }}
+          className="result-module-card result-claim-card p-6 sm:p-7"
+        >
+          <span className="result-eyebrow block mb-2">
             Claim
           </span>
           <p className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-50 leading-snug">
@@ -289,36 +338,54 @@ Verified by TruthLens — Evidence First.`;
               <span className="font-semibold">{result.checkedFocus}</span>
             </div>
           )}
-        </div>
+        </motion.div>
 
         {/* 3. WHY? */}
-        <div className="p-6 sm:p-7 border-b border-slate-100 dark:border-slate-800/80">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 block mb-2">
+        <motion.div
+          variants={revealVariants}
+          initial="hidden"
+          animate="visible"
+          transition={{ duration: 0.45, delay: 0.3, ease: "easeOut" }}
+          className="result-module-card p-6 sm:p-7"
+        >
+          <span className="result-eyebrow block mb-2">
             Why?
           </span>
           <p className="text-sm sm:text-base text-slate-700 dark:text-slate-300 leading-relaxed font-normal">
             {result.why}
           </p>
-        </div>
+        </motion.div>
 
         {result.truthCorrection && result.verdict !== "TRUE" && result.verdict !== "LIKELY TRUE" && (
-          <div className="p-6 sm:p-7 border-b border-teal-200/70 dark:border-teal-900/60 bg-teal-50/60 dark:bg-teal-950/20">
+          <motion.div
+            variants={revealVariants}
+            initial="hidden"
+            animate="visible"
+            transition={{ duration: 0.45, delay: 0.35, ease: "easeOut" }}
+            className="result-module-card border-teal-300/40 bg-teal-50/60 dark:border-teal-900/60 dark:bg-teal-950/20 p-6 sm:p-7"
+          >
             <span className="text-[11px] font-bold uppercase tracking-wider text-teal-700 dark:text-teal-300 block mb-2">
               What the evidence says instead
             </span>
             <p className="text-sm sm:text-base text-teal-950 dark:text-teal-100 leading-relaxed font-semibold">
               {result.truthCorrection}
             </p>
-          </div>
+          </motion.div>
         )}
 
         {/* 4. EVIDENCE (Supporting, Contradicting, Important Context) */}
-        <div className="p-6 sm:p-7 border-b border-slate-100 dark:border-slate-800/80 bg-slate-50/20 dark:bg-slate-950/10 space-y-4">
+        <motion.div
+          variants={revealVariants}
+          initial="hidden"
+          animate="visible"
+          transition={{ duration: 0.45, delay: 0.4, ease: "easeOut" }}
+          className="result-module-card p-6 sm:p-7 space-y-4"
+        >
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 block">
               Evidence Breakdown
             </span>
-            {(result.verdict === "UNVERIFIED" || result.verdict === "UNVERIFIABLE") && (
+            {result.verdict === "UNVERIFIED" && (
               <span className="text-[11px] text-amber-600 dark:text-amber-400 font-medium">
                 Absence of contradiction is not proof of truth
               </span>
@@ -326,10 +393,10 @@ Verified by TruthLens — Evidence First.`;
           </div>
 
           {hasCategorizedEvidence ? (
-            <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {/* Supporting Evidence */}
               {supporting.length > 0 && (
-                <div className="space-y-2">
+                <div className="result-evidence-card result-evidence-support space-y-2">
                   <h4 className="text-xs font-bold text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5 uppercase tracking-wider">
                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
                     <span>Supporting Evidence</span>
@@ -346,7 +413,7 @@ Verified by TruthLens — Evidence First.`;
 
               {/* Contradicting Evidence */}
               {contradicting.length > 0 && (
-                <div className="space-y-2 pt-1">
+                <div className="result-evidence-card result-evidence-warning space-y-2 pt-1">
                   <h4 className="text-xs font-bold text-rose-700 dark:text-rose-400 flex items-center gap-1.5 uppercase tracking-wider">
                     <AlertTriangle className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400 shrink-0" />
                     <span>Contradicting Evidence</span>
@@ -363,7 +430,7 @@ Verified by TruthLens — Evidence First.`;
 
               {/* Context Evidence */}
               {context.length > 0 && (
-                <div className="space-y-2 pt-1">
+                <div className="result-evidence-card result-evidence-context space-y-2 pt-1">
                   <h4 className="text-xs font-bold text-slate-700 dark:text-slate-400 flex items-center gap-1.5 uppercase tracking-wider">
                     <Info className="w-3.5 h-3.5 text-blue-500 shrink-0" />
                     <span>Important Context</span>
@@ -407,7 +474,7 @@ Verified by TruthLens — Evidence First.`;
               Limited direct evidence available in public records.
             </p>
           )}
-        </div>
+        </motion.div>
 
         {/* 5. IMAGE CHECK / DOCUMENT CHECK (Only for file inputs) */}
         {(isImageAnalysis || result.imageAssessment || result.imageAnalysis) && (
@@ -470,7 +537,13 @@ Verified by TruthLens — Evidence First.`;
         )}
 
         {/* 6. SOURCES */}
-        <div className="p-6 sm:p-7 border-b border-slate-100 dark:border-slate-800/80">
+        <motion.div
+          variants={revealVariants}
+          initial="hidden"
+          animate="visible"
+          transition={{ duration: 0.45, delay: 0.6, ease: "easeOut" }}
+          className="result-module-card p-6 sm:p-7"
+        >
           <div className="flex items-center justify-between mb-4">
             <div>
               <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 block">
@@ -498,20 +571,22 @@ Verified by TruthLens — Evidence First.`;
                   (effectiveUrl.startsWith("http://") || effectiveUrl.startsWith("https://"));
 
                 const sourceDate = source.publishedDate || source.date;
-                const summaryText = source.summary || source.evidenceSummary || source.relevance;
+                const displayTitle = cleanSourceText(source.title);
+                const displayPublisher = cleanSourceText(source.publisher);
+                const summaryText = cleanSourceText(source.summary || source.evidenceSummary || source.relevance);
                 const tierDisplay = source.sourceTier || source.tier;
 
                 return (
                   <div
                     key={index}
-                    className="p-4 rounded-xl bg-slate-50/70 dark:bg-slate-900/60 border border-slate-200/90 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 group"
+                    className="result-source-card p-4 rounded-2xl bg-slate-50/70 dark:bg-slate-900/60 border border-slate-200/90 dark:border-slate-800 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 group"
                   >
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                         <SourceFavicon source={source} />
-                        {source.publisher && (
+                        {displayPublisher && (
                           <span className="font-bold text-xs text-slate-900 dark:text-slate-100">
-                            {source.publisher}
+                            {displayPublisher}
                           </span>
                         )}
                         {getRelationshipBadge(source.relationship)}
@@ -546,10 +621,10 @@ Verified by TruthLens — Evidence First.`;
                             rel="noopener noreferrer"
                             className="hover:underline focus:outline-hidden"
                           >
-                            "{source.title}"
+                            "{displayTitle}"
                           </a>
                         ) : (
-                          <span>"{source.title}"</span>
+                          <span>"{displayTitle}"</span>
                         )}
                       </h4>
 
@@ -566,10 +641,10 @@ Verified by TruthLens — Evidence First.`;
                           href={effectiveUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-blue-600 dark:text-blue-400 text-xs font-bold transition-colors cursor-pointer border border-blue-200 dark:border-blue-800/80"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-teal-50 dark:bg-teal-950/50 hover:bg-teal-100 dark:hover:bg-teal-900/60 text-teal-700 dark:text-teal-300 text-xs font-bold transition-colors cursor-pointer border border-teal-200 dark:border-teal-800/80"
                         >
                           <span>Open Source</span>
-                          <ExternalLink className="w-3.5 h-3.5" />
+                          <ExternalLink className="w-3.5 h-3.5 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
                         </a>
                       ) : (
                         <span className="text-[11px] text-slate-400 dark:text-slate-500 italic">
@@ -586,7 +661,7 @@ Verified by TruthLens — Evidence First.`;
               Reliable external evidence was not found for this specific claim.
             </div>
           )}
-        </div>
+        </motion.div>
 
         {/* 7. BOTTOM LINE */}
         {result.bottomLine && (

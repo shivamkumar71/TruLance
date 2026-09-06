@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Shield,
   Search,
@@ -22,14 +22,68 @@ interface HomeViewProps {
   onNavigateToFeatures?: () => void;
 }
 
+interface SpotlightCardProps {
+  children: React.ReactNode;
+  className?: string;
+}
+
+const SpotlightCard: React.FC<SpotlightCardProps> = ({ children, className = "" }) => {
+  const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    event.currentTarget.style.setProperty("--spotlight-x", `${event.clientX - rect.left}px`);
+    event.currentTarget.style.setProperty("--spotlight-y", `${event.clientY - rect.top}px`);
+  };
+
+  return (
+    <div onPointerMove={handlePointerMove} className={`spotlight-card ${className}`}>
+      <div className="spotlight-card-glow" aria-hidden="true" />
+      <div className="relative z-10">{children}</div>
+    </div>
+  );
+};
+
 export const HomeView: React.FC<HomeViewProps> = ({
   onNavigateToCheck,
   onNavigateToHowItWorks,
 }) => {
+  const [heroPointer, setHeroPointer] = useState({ x: 50, y: 20 });
+  const [activeWorkflowStep, setActiveWorkflowStep] = useState(0);
+  const workflowRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const workflow = workflowRef.current;
+    if (!workflow) return;
+
+    const steps = Array.from(workflow.querySelectorAll<HTMLElement>("[data-workflow-step]"));
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            setActiveWorkflowStep(Number(entry.target.getAttribute("data-workflow-step")));
+          }
+        });
+      },
+      { threshold: 0.55, rootMargin: "0px 0px -12% 0px" }
+    );
+
+    steps.forEach((step: HTMLElement) => observer.observe(step));
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <div className="w-full flex flex-col items-center">
       {/* 1. HERO SECTION */}
-      <section className="hero-surface relative isolate w-full overflow-hidden">
+      <section
+        className="hero-surface relative isolate w-full overflow-hidden"
+        onPointerMove={(event) => {
+          const rect = event.currentTarget.getBoundingClientRect();
+          setHeroPointer({
+            x: ((event.clientX - rect.left) / rect.width) * 100,
+            y: ((event.clientY - rect.top) / rect.height) * 100,
+          });
+        }}
+        style={{ "--hero-pointer-x": `${heroPointer.x}%`, "--hero-pointer-y": `${heroPointer.y}%` } as React.CSSProperties}
+      >
         <div className="hero-orbit hero-orbit-one" aria-hidden="true" />
         <div className="hero-orbit hero-orbit-two" aria-hidden="true" />
         <div className="relative z-10 mx-auto grid min-h-[610px] w-full max-w-7xl items-center gap-12 px-4 py-20 sm:px-8 lg:grid-cols-12 lg:gap-10 lg:py-24">
@@ -41,7 +95,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             <h1 className="hero-reveal hero-delay-one max-w-4xl text-5xl font-bold leading-[0.98] tracking-[-0.04em] text-slate-50 sm:text-7xl lg:text-[88px]">
               Know what’s true.
               <br />
-              <span className="text-teal-300">Before you share it.</span>
+              <span className="hero-gradient-text">Before you share it.</span>
             </h1>
             <p className="hero-reveal hero-delay-two mt-8 max-w-2xl text-base leading-8 text-slate-300 sm:text-xl">
               AI-powered verification for claims, news, images and documents, backed by evidence instead of guesswork.
@@ -60,11 +114,11 @@ export const HomeView: React.FC<HomeViewProps> = ({
               ))}
             </div>
             <div className="hero-reveal hero-delay-four mt-12 flex flex-wrap items-center gap-5">
-              <button type="button" onClick={onNavigateToCheck} id="btn-hero-check-claim" className="inline-flex items-center gap-2 rounded-xl bg-teal-400 px-7 py-3.5 text-sm font-bold text-slate-950 shadow-[0_10px_30px_rgba(45,212,191,0.22)] transition hover:-translate-y-0.5 hover:bg-teal-300">
+              <button type="button" onClick={onNavigateToCheck} id="btn-hero-check-claim" className="hero-cta inline-flex items-center gap-2 rounded-xl bg-teal-400 px-7 py-3.5 text-sm font-bold text-slate-950 shadow-[0_10px_30px_rgba(45,212,191,0.22)] transition hover:-translate-y-0.5 hover:bg-teal-300">
                 Try the live demo <ArrowRight className="h-4 w-4" />
               </button>
-              <button type="button" onClick={onNavigateToHowItWorks} id="btn-hero-how-it-works" className="text-sm font-semibold text-slate-300 transition hover:text-teal-300">
-                See how it works <span aria-hidden="true">→</span>
+              <button type="button" onClick={onNavigateToHowItWorks} id="btn-hero-how-it-works" className="group inline-flex items-center gap-2 text-sm font-semibold text-slate-300 transition hover:text-teal-300">
+                See how it works <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1.5" />
               </button>
             </div>
           </div>
@@ -79,6 +133,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 loading="eager"
               />
               <div className="hero-image-wash" aria-hidden="true" />
+              <div className="hero-scan-line" aria-hidden="true" />
+              <div className="hero-scan-status" aria-hidden="true"><span /> Scanning visual context</div>
               <div className="hero-image-label hero-image-label-top">
                 <span className="hero-image-dot" />
                 Evidence in context
@@ -162,9 +218,9 @@ export const HomeView: React.FC<HomeViewProps> = ({
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div ref={workflowRef} className="workflow-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {/* Step 1 */}
-          <div className="p-6 rounded-2xl bg-white dark:bg-slate-900/80 border border-slate-200/90 dark:border-slate-800 shadow-2xs hover:border-blue-500/40 transition-all">
+          <div data-workflow-step="0" className={`workflow-step p-6 rounded-2xl bg-white dark:bg-slate-900/80 border border-slate-200/90 dark:border-slate-800 shadow-2xs ${activeWorkflowStep >= 0 ? "workflow-step-active" : ""}`}>
             <div className="flex items-center justify-between mb-4">
               <span className="text-xs font-extrabold text-blue-600 dark:text-blue-400 font-mono tracking-wider">
                 01
@@ -182,7 +238,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
           </div>
 
           {/* Step 2 */}
-          <div className="p-6 rounded-2xl bg-white dark:bg-slate-900/80 border border-slate-200/90 dark:border-slate-800 shadow-2xs hover:border-blue-500/40 transition-all">
+          <div data-workflow-step="1" className={`workflow-step p-6 rounded-2xl bg-white dark:bg-slate-900/80 border border-slate-200/90 dark:border-slate-800 shadow-2xs ${activeWorkflowStep >= 1 ? "workflow-step-active" : ""}`}>
             <div className="flex items-center justify-between mb-4">
               <span className="text-xs font-extrabold text-blue-600 dark:text-blue-400 font-mono tracking-wider">
                 02
@@ -200,7 +256,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
           </div>
 
           {/* Step 3 */}
-          <div className="p-6 rounded-2xl bg-white dark:bg-slate-900/80 border border-slate-200/90 dark:border-slate-800 shadow-2xs hover:border-blue-500/40 transition-all">
+          <div data-workflow-step="2" className={`workflow-step p-6 rounded-2xl bg-white dark:bg-slate-900/80 border border-slate-200/90 dark:border-slate-800 shadow-2xs ${activeWorkflowStep >= 2 ? "workflow-step-active" : ""}`}>
             <div className="flex items-center justify-between mb-4">
               <span className="text-xs font-extrabold text-blue-600 dark:text-blue-400 font-mono tracking-wider">
                 03
@@ -218,7 +274,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
           </div>
 
           {/* Step 4 */}
-          <div className="p-6 rounded-2xl bg-white dark:bg-slate-900/80 border border-slate-200/90 dark:border-slate-800 shadow-2xs hover:border-blue-500/40 transition-all">
+          <div data-workflow-step="3" className={`workflow-step p-6 rounded-2xl bg-white dark:bg-slate-900/80 border border-slate-200/90 dark:border-slate-800 shadow-2xs ${activeWorkflowStep >= 3 ? "workflow-step-active" : ""}`}>
             <div className="flex items-center justify-between mb-4">
               <span className="text-xs font-extrabold text-blue-600 dark:text-blue-400 font-mono tracking-wider">
                 04
@@ -253,7 +309,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <div className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-2xs">
+            <SpotlightCard className="p-6 rounded-2xl">
               <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center mb-4">
                 <Sparkles className="w-5 h-5" />
               </div>
@@ -263,9 +319,9 @@ export const HomeView: React.FC<HomeViewProps> = ({
               <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
                 Extract the core factual propositions from text, images, or documents before searching for external corroboration.
               </p>
-            </div>
+            </SpotlightCard>
 
-            <div className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-2xs">
+            <SpotlightCard className="p-6 rounded-2xl">
               <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center mb-4">
                 <Layers className="w-5 h-5" />
               </div>
@@ -275,9 +331,9 @@ export const HomeView: React.FC<HomeViewProps> = ({
               <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
                 Cross-check assertions against multiple independent sources, distinguishing original reporting from syndicated copies.
               </p>
-            </div>
+            </SpotlightCard>
 
-            <div className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-2xs">
+            <SpotlightCard className="p-6 rounded-2xl">
               <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center mb-4">
                 <FileCheck className="w-5 h-5" />
               </div>
@@ -287,9 +343,9 @@ export const HomeView: React.FC<HomeViewProps> = ({
               <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
                 Verify screenshots, photographs, PDFs, and Word documents while separating media authenticity from claim truth.
               </p>
-            </div>
+            </SpotlightCard>
 
-            <div className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-2xs">
+            <SpotlightCard className="p-6 rounded-2xl">
               <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center mb-4">
                 <Eye className="w-5 h-5" />
               </div>
@@ -299,9 +355,9 @@ export const HomeView: React.FC<HomeViewProps> = ({
               <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
                 Every citation points to the specific relevant article or document, validated in real-time to avoid dead 404 links.
               </p>
-            </div>
+            </SpotlightCard>
 
-            <div className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-2xs">
+            <SpotlightCard className="p-6 rounded-2xl">
               <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center mb-4">
                 <ShieldAlert className="w-5 h-5" />
               </div>
@@ -311,9 +367,9 @@ export const HomeView: React.FC<HomeViewProps> = ({
               <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
                 Confidence reflects actual evidence depth and source consensus, distinguishing solid facts from emerging or unverified claims.
               </p>
-            </div>
+            </SpotlightCard>
 
-            <div className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-2xs">
+            <SpotlightCard className="p-6 rounded-2xl">
               <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center mb-4">
                 <Clock className="w-5 h-5" />
               </div>
@@ -323,7 +379,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
               <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
                 Time-sensitive breaking claims prioritize fresh reports, while historical claims are corroborated with authoritative records.
               </p>
-            </div>
+            </SpotlightCard>
           </div>
         </div>
       </section>

@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
+import { motion, useSpring, useTransform } from "motion/react";
 import { EvidenceStrength, ConfidenceLevel, ClaimType, VerificationDifficulty } from "../types";
 
 interface ConfidenceMeterProps {
@@ -17,6 +18,15 @@ export const ConfidenceMeter: React.FC<ConfidenceMeterProps> = ({
   verificationDifficulty,
 }) => {
   const normalized = Math.max(5, Math.min(98, Math.round(score)));
+  const animatedScore = useSpring(0, { stiffness: 75, damping: 18, mass: 0.7 });
+  const roundedScore = useTransform(animatedScore, (value) => Math.round(value));
+  const [displayScore, setDisplayScore] = useState(0);
+
+  useEffect(() => {
+    const unsubscribe = roundedScore.on("change", setDisplayScore);
+    animatedScore.set(normalized);
+    return unsubscribe;
+  }, [animatedScore, normalized, roundedScore]);
 
   // Derive explicit Evidence Strength string if not provided
   const derivedStrength: EvidenceStrength =
@@ -79,16 +89,18 @@ export const ConfidenceMeter: React.FC<ConfidenceMeterProps> = ({
           {derivedStrength}
         </span>
         <span className="text-lg sm:text-xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100">
-          {normalized}%
+          {displayScore}%
         </span>
       </div>
 
       {/* Progress Bar & Sub-indicators */}
       <div className="flex items-center gap-2">
-        <div className="w-28 sm:w-32 h-2 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden border border-slate-300/40 dark:border-slate-700/50">
-          <div
-            className={`h-full ${style.barColor} rounded-full transition-all duration-700 ease-out`}
-            style={{ width: `${normalized}%` }}
+        <div className="w-36 sm:w-44 h-2.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden border border-slate-300/40 dark:border-slate-700/50">
+          <motion.div
+            className="h-full rounded-full bg-gradient-to-r from-teal-500 to-cyan-400 shadow-[0_0_14px_rgba(45,212,191,0.5)]"
+            initial={{ width: 0 }}
+            animate={{ width: `${normalized}%` }}
+            transition={{ duration: 1.2, delay: 0.25, ease: "easeOut" }}
           />
         </div>
         <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">

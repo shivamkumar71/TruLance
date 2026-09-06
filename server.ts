@@ -1109,6 +1109,34 @@ function generateStagedQueries(
 }
 
 // Discover Real Web Sources from Live Web Search with Caching & Validation
+function decodeHtmlEntities(value: string): string {
+  const namedEntities: Record<string, string> = {
+    amp: "&",
+    apos: "'",
+    gt: ">",
+    lt: "<",
+    nbsp: " ",
+    quot: '"',
+  };
+
+  return value
+    .replace(/&#(\d+);/g, (_, code: string) => String.fromCodePoint(Number(code)))
+    .replace(/&#x([\da-f]+);/gi, (_, code: string) => String.fromCodePoint(parseInt(code, 16)))
+    .replace(/&([a-z]+);/gi, (match: string, name: string) => namedEntities[name.toLowerCase()] || match);
+}
+
+function cleanFeedText(value: string): string {
+  let cleaned = decodeHtmlEntities(value)
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/gi, "$1")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  // RSS descriptions can contain a nested linked headline and a publisher suffix.
+  cleaned = cleaned.replace(/\s*(?:<a\b[^>]*>.*?<\/a>|Read more|Continue reading)\s*$/i, "").trim();
+  return cleaned;
+}
+
 async function discoverRealWebSources(
   queries: string[],
   claimInfo: { entities: string[]; numbers: string[]; dates: string[]; keywords: string[] }
@@ -1210,10 +1238,7 @@ async function discoverRealWebSources(
           for (const item of itemMatches.slice(0, 8)) {
             const readTag = (tag: string) => {
               const match = item.match(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`, "i"));
-              return (match?.[1] || "")
-                .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
-                .replace(/<[^>]+>/g, "")
-                .trim();
+              return cleanFeedText(match?.[1] || "");
             };
 
             const title = readTag("title");
