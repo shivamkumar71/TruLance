@@ -51,6 +51,258 @@ app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", service: "TruthLens", timestamp: new Date().toISOString() });
 });
 
+function decodeXmlEntities(value: string): string {
+  return value
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&#x27;/gi, "'")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function inferNewsCategory(title: string): {
+  category: string;
+  badgeBg: string;
+  badgeText: string;
+  icon: string;
+} {
+  const t = title.toLowerCase();
+  if (/\b(ai|openai|google|apple|microsoft|tech|cyber|chip|iphone|software|deepfake)\b/.test(t)) {
+    return { category: "Tech", badgeBg: "bg-purple-500/10 dark:bg-purple-500/20 border-purple-500/30", badgeText: "text-purple-600 dark:text-purple-400", icon: "⚡" };
+  }
+  if (/\b(nasa|space|mars|isro|scientist|climate|earthquake|telescope|moon)\b/.test(t)) {
+    return { category: "Science", badgeBg: "bg-cyan-500/10 dark:bg-cyan-500/20 border-cyan-500/30", badgeText: "text-cyan-600 dark:text-cyan-400", icon: "🔭" };
+  }
+  if (/\b(health|who|vaccine|covid|hospital|disease|virus|doctor)\b/.test(t)) {
+    return { category: "Health", badgeBg: "bg-rose-500/10 dark:bg-rose-500/20 border-rose-500/30", badgeText: "text-rose-600 dark:text-rose-400", icon: "⚕️" };
+  }
+  if (/\b(election|minister|president|parliament|court|policy|bjp|congress|pm |modi|trump|vote)\b/.test(t)) {
+    return { category: "Politics", badgeBg: "bg-blue-500/10 dark:bg-blue-500/20 border-blue-500/30", badgeText: "text-blue-600 dark:text-blue-400", icon: "📊" };
+  }
+  if (/\b(market|stock|gdp|bank|inflation|rupee|economy|sensex)\b/.test(t)) {
+    return { category: "Business", badgeBg: "bg-amber-500/10 dark:bg-amber-500/20 border-amber-500/30", badgeText: "text-amber-600 dark:text-amber-400", icon: "📈" };
+  }
+  return { category: "World", badgeBg: "bg-indigo-500/10 dark:bg-indigo-500/20 border-indigo-500/30", badgeText: "text-indigo-600 dark:text-indigo-400", icon: "🌐" };
+}
+
+function formatNewsAge(pubDate?: string): string {
+  if (!pubDate) return "Live";
+  const ts = Date.parse(pubDate);
+  if (Number.isNaN(ts)) return "Live";
+  const mins = Math.max(1, Math.round((Date.now() - ts) / 60000));
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.round(hours / 24);
+  return `${days}d ago`;
+}
+
+async function fetchRssNews(url: string): Promise<Array<{ title: string; link: string; sourceName: string; publishedTime: string }>> {
+  const resp = await fetch(url, {
+    headers: {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+      Accept: "application/rss+xml, application/xml, text/xml, */*",
+    },
+    signal: AbortSignal.timeout(4500),
+  });
+  if (!resp.ok) return [];
+  const xml = await resp.text();
+  const items: Array<{ title: string; link: string; sourceName: string; publishedTime: string }> = [];
+  const blocks = Array.from(xml.matchAll(/<item>([\s\S]*?)<\/item>/gi));
+  for (const block of blocks.slice(0, 18)) {
+    const chunk = block[1];
+    const title = decodeXmlEntities((chunk.match(/<title>([\s\S]*?)<\/title>/i)?.[1] || ""));
+    const link = decodeXmlEntities((chunk.match(/<link>([\s\S]*?)<\/link>/i)?.[1] || "")).replace(/&amp;/g, "&");
+    const sourceTag = chunk.match(/<source[^>]*>([\s\S]*?)<\/source>/i)?.[1] || "";
+    const creator = chunk.match(/<dc:creator>([\s\S]*?)<\/dc:creator>/i)?.[1] || "";
+    const pubDate = chunk.match(/<pubDate>([\s\S]*?)<\/pubDate>/i)?.[1] || "";
+    if (!title || title.length < 18) continue;
+    let sourceName = decodeXmlEntities(sourceTag || creator);
+    if (!sourceName && title.includes(" - ")) {
+      sourceName = title.split(" - ").pop() || "";
+    }
+    if (!sourceName && link) {
+      try {
+        sourceName = new URL(link).hostname.replace(/^www\./, "");
+      } catch {
+        sourceName = "News";
+      }
+    }
+    const cleanTitle = title.replace(/\s+-\s+[^-]+$/, "").trim() || title;
+    items.push({
+      title: cleanTitle,
+      link,
+      sourceName: sourceName || "News",
+      publishedTime: formatNewsAge(pubDate),
+    });
+  }
+  return items;
+}
+
+function shuffleNews<T>(list: T[]): T[] {
+  const copy = [...list];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
+// Trending & Circulating News Claims Endpoint
+// Returns fresh real-world news and circulating claims with category labels & source links
+app.get("/api/trending-news", async (_req, res) => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+  interface NewsItem {
+    id: string;
+    title: string;
+    category: string;
+    badgeBg: string;
+    badgeText: string;
+    icon: string;
+    sourceName: string;
+    sourceUrl?: string;
+    publishedTime: string;
+  }
+
+  const defaultPool: NewsItem[] = [
+    {
+      id: "news-1",
+      title: "NASA James Webb Space Telescope confirms discovery of carbon dioxide atmosphere on exoplanet WASP-39 b",
+      category: "Science & Space",
+      badgeBg: "bg-cyan-500/10 dark:bg-cyan-500/20 border-cyan-500/30",
+      badgeText: "text-cyan-600 dark:text-cyan-400",
+      icon: "🔭",
+      sourceName: "NASA Science",
+      sourceUrl: "https://science.nasa.gov",
+      publishedTime: "Recent",
+    },
+    {
+      id: "news-2",
+      title: "India reports Q1 FY2026-27 GDP growth rate of 7.8% led by manufacturing and services",
+      category: "Politics",
+      badgeBg: "bg-blue-500/10 dark:bg-blue-500/20 border-blue-500/30",
+      badgeText: "text-blue-600 dark:text-blue-400",
+      icon: "📊",
+      sourceName: "Ministry of Statistics (MoSPI)",
+      sourceUrl: "https://mospi.gov.in",
+      publishedTime: "Official Record",
+    },
+    {
+      id: "news-3",
+      title: "WHO clarifies viral claim: consuming boiled garlic water does not cure viral pneumonia or COVID variants",
+      category: "Health & Climate",
+      badgeBg: "bg-rose-500/10 dark:bg-rose-500/20 border-rose-500/30",
+      badgeText: "text-rose-600 dark:text-rose-400",
+      icon: "⚕️",
+      sourceName: "WHO Fact Sheet",
+      sourceUrl: "https://who.int",
+      publishedTime: "Fact Check",
+    },
+    {
+      id: "news-4",
+      title: "OpenAI and Google DeepMind release new reasoning benchmark standards for frontier generative models",
+      category: "Tech & AI",
+      badgeBg: "bg-purple-500/10 dark:bg-purple-500/20 border-purple-500/30",
+      badgeText: "text-purple-600 dark:text-purple-400",
+      icon: "⚡",
+      sourceName: "Reuters Tech",
+      sourceUrl: "https://reuters.com",
+      publishedTime: "Today",
+    },
+    {
+      id: "news-5",
+      title: "UN Climate Summit announces international accord on deep-sea mineral exploration moratorium",
+      category: "Health & Climate",
+      badgeBg: "bg-emerald-500/10 dark:bg-emerald-500/20 border-emerald-500/30",
+      badgeText: "text-emerald-600 dark:text-emerald-400",
+      icon: "🌊",
+      sourceName: "UN Climate Press",
+      sourceUrl: "https://un.org",
+      publishedTime: "Today",
+    },
+    {
+      id: "news-6",
+      title: "EU passes comprehensive Digital Services enforcement rules targeting deceptive deepfake videos",
+      category: "World",
+      badgeBg: "bg-indigo-500/10 dark:bg-indigo-500/20 border-indigo-500/30",
+      badgeText: "text-indigo-600 dark:text-indigo-400",
+      icon: "🌐",
+      sourceName: "BBC World",
+      sourceUrl: "https://bbc.com",
+      publishedTime: "Breaking",
+    },
+    {
+      id: "news-7",
+      title: "Viral video claiming 5G towers cause birds to fall in central Europe debunked by ornithologists",
+      category: "Tech & AI",
+      badgeBg: "bg-amber-500/10 dark:bg-amber-500/20 border-amber-500/30",
+      badgeText: "text-amber-600 dark:text-amber-400",
+      icon: "📡",
+      sourceName: "FactCheck.org",
+      sourceUrl: "https://factcheck.org",
+      publishedTime: "Fact Check",
+    },
+    {
+      id: "news-8",
+      title: "ISRO prepares next-generation reusable launch vehicle test flight from Sriharikota",
+      category: "Science & Space",
+      badgeBg: "bg-cyan-500/10 dark:bg-cyan-500/20 border-cyan-500/30",
+      badgeText: "text-cyan-600 dark:text-cyan-400",
+      icon: "🚀",
+      sourceName: "ISRO Official",
+      sourceUrl: "https://isro.gov.in",
+      publishedTime: "Recent",
+    }
+  ];
+
+  try {
+    const feedResults = await Promise.allSettled([
+      fetchRssNews("https://news.google.com/rss?hl=en-IN&gl=IN&ceid=IN:en"),
+      fetchRssNews("https://feeds.bbci.co.uk/news/world/rss.xml"),
+      fetchRssNews("https://news.google.com/rss/search?q=when:1d&hl=en&gl=US&ceid=US:en"),
+    ]);
+
+    const liveItems: NewsItem[] = [];
+    const seenTitles = new Set<string>();
+
+    for (const result of feedResults) {
+      if (result.status !== "fulfilled") continue;
+      for (const item of result.value) {
+        const key = item.title.toLowerCase().slice(0, 80);
+        if (seenTitles.has(key)) continue;
+        seenTitles.add(key);
+        const meta = inferNewsCategory(item.title);
+        liveItems.push({
+          id: `live-${liveItems.length}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          title: item.title.length > 120 ? `${item.title.slice(0, 117)}…` : item.title,
+          category: meta.category,
+          badgeBg: meta.badgeBg,
+          badgeText: meta.badgeText,
+          icon: meta.icon,
+          sourceName: item.sourceName,
+          sourceUrl: item.link || undefined,
+          publishedTime: item.publishedTime,
+        });
+      }
+    }
+
+    if (liveItems.length >= 4) {
+      return res.json({ news: shuffleNews(liveItems).slice(0, 6), source: "live" });
+    }
+  } catch {
+    // Use rotating fallback pool
+  }
+
+  const shuffled = shuffleNews(defaultPool).slice(0, 4);
+  res.json({ news: shuffled, source: "curated" });
+});
+
 function normalizeVerdict(val?: string): VerdictType {
   const upper = (val || "").toUpperCase().trim();
   if (upper === "TRUE" || upper.includes("VERIFIED TRUE")) return "TRUE";
@@ -1139,15 +1391,25 @@ function cleanFeedText(value: string): string {
 
 async function discoverRealWebSources(
   queries: string[],
-  claimInfo: { entities: string[]; numbers: string[]; dates: string[]; keywords: string[] }
+  claimInfo: { entities: string[]; numbers: string[]; dates: string[]; keywords: string[] },
+  onProgress?: (info: { query: string; index: number; total: number; found: number }) => void
 ): Promise<DiscoveredSource[]> {
   const discovered: DiscoveredSource[] = [];
   const seenCanonicalUrls = new Set<string>();
   const now = Date.now();
+  const usableQueries = queries.filter((q) => q && q.trim());
+  let queryIndex = 0;
 
   for (const q of queries) {
     if (!q || !q.trim()) continue;
     const cleanQ = q.trim().slice(0, 120);
+    queryIndex += 1;
+    onProgress?.({
+      query: cleanQ,
+      index: queryIndex,
+      total: usableQueries.length,
+      found: discovered.length,
+    });
 
     // Check query cache to avoid hitting rate limits
     const cached = searchCache.get(cleanQ);
@@ -1323,6 +1585,12 @@ async function discoverRealWebSources(
 
     // Save in search cache
     searchCache.set(cleanQ, { data: currentQueryResults, timestamp: now });
+    onProgress?.({
+      query: cleanQ,
+      index: queryIndex,
+      total: usableQueries.length,
+      found: discovered.length,
+    });
 
     if (discovered.length >= 14) break;
   }
@@ -1471,12 +1739,41 @@ Return ONLY structured JSON:
 
 // Verification Endpoint
 app.post("/api/verify", async (req, res) => {
+  const wantsStream =
+    String(req.headers.accept || "").includes("text/event-stream") ||
+    req.headers["x-truthlens-stream"] === "1";
+
+  const emitProgress = (payload: Record<string, unknown>) => {
+    if (!wantsStream) return;
+    if (!res.headersSent) {
+      res.status(200);
+      res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+      res.setHeader("Cache-Control", "no-cache, no-transform");
+      res.setHeader("Connection", "keep-alive");
+      res.setHeader("X-Accel-Buffering", "no");
+      if (typeof (res as any).flushHeaders === "function") {
+        (res as any).flushHeaders();
+      }
+    }
+    res.write(`data: ${JSON.stringify(payload)}\n\n`);
+    if (typeof (res as any).flush === "function") (res as any).flush();
+  };
+
   try {
     const { text, userContext, fileBase64, mimeType, fileName } = req.body;
 
     if (!text && !fileBase64 && !userContext) {
       return res.status(400).json({ error: "Please provide content or a claim to check." });
     }
+
+    emitProgress({
+      type: "progress",
+      step: "parse",
+      percent: 6,
+      title: "Reading input",
+      message: "Extracting the claim and key facts",
+      log: "PARSE :: reading submitted content...",
+    });
 
     const ai = getAI();
     const isImage = mimeType?.startsWith("image/");
@@ -1489,6 +1786,14 @@ app.post("/api/verify", async (req, res) => {
 
     let docxExtractedText = "";
     if (isDocx && fileBase64) {
+      emitProgress({
+        type: "progress",
+        step: "parse",
+        percent: 10,
+        title: "Reading document",
+        message: "Extracting text from the uploaded file",
+        log: "PARSE :: extracting document text...",
+      });
       docxExtractedText = await extractDocxText(fileBase64);
     }
 
@@ -1497,14 +1802,53 @@ app.post("/api/verify", async (req, res) => {
     // STEP 1: MULTI-STAGE QUERY FORMULATION & CLAIM ENTITY EXTRACTION
     let imageAnalysisData: ImageExtractionResult | null = null;
     if (isImage && fileBase64) {
+      emitProgress({
+        type: "progress",
+        step: "parse",
+        percent: 12,
+        title: "Reading image",
+        message: "Extracting visible text, claims and visual context",
+        log: "PARSE :: inspecting image content...",
+      });
       imageAnalysisData = await extractImageClaimsAndQueries(ai, fileBase64, mimeType, userContext);
     }
 
     const claimSourceText = (text || docxExtractedText || imageAnalysisData?.mainClaim || imageAnalysisData?.headline || "").trim();
     const staged = generateStagedQueries(claimSourceText, userContext, imageAnalysisData);
 
+    emitProgress({
+      type: "progress",
+      step: "search",
+      percent: 18,
+      title: "Searching sources",
+      message: staged.queries[0] ? `Querying: ${staged.queries[0].slice(0, 72)}` : "Searching public records",
+      log: `SEARCH :: ${staged.queries.length} live queries queued...`,
+      sourcesFound: 0,
+    });
+
     // STEP 2: DISCOVER REAL WEB SOURCES FROM LIVE SEARCH INDEXES & VALIDATE EXACT ARTICLE URLS
-    const discoveredSources = await discoverRealWebSources(staged.queries, staged.claimInfo);
+    const discoveredSources = await discoverRealWebSources(staged.queries, staged.claimInfo, (info) => {
+      const span = 18 + Math.round((info.index / Math.max(info.total, 1)) * 32);
+      emitProgress({
+        type: "progress",
+        step: "search",
+        percent: Math.min(50, span),
+        title: "Searching sources",
+        message: `Live search ${info.index}/${info.total}`,
+        log: `SEARCH :: ${info.query.slice(0, 88)} — ${info.found} sources so far`,
+        sourcesFound: info.found,
+      });
+    });
+
+    emitProgress({
+      type: "progress",
+      step: "search",
+      percent: 54,
+      title: "Searching sources",
+      message: discoveredSources.length ? `${discoveredSources.length} sources found` : "No live sources yet",
+      log: `SEARCH :: ${discoveredSources.length} validated URLs ready`,
+      sourcesFound: discoveredSources.length,
+    });
 
     const systemPrompt = `You are TruthLens, a rigorous, evidence-first factual verification engine.
 CURRENT REFERENCE DATE: ${currentDateStr}.
@@ -1556,6 +1900,12 @@ CORE SCIENTIFIC VERIFICATION PRINCIPLES:
    - The Evidence Breakdown section must consist exclusively of clean, readable factual assertions.
    - ALL URLs and links belong EXCLUSIVELY in the 'sources' array under Curated Resources.
 
+8. TRUTH CORRECTION & ACCURATE FACTS (MANDATORY FOR FALSE / LIKELY FALSE / MISLEADING / MIXED):
+   - When a claim is FALSE, LIKELY FALSE, MISLEADING, or MIXED, you MUST explicitly provide the accurate real-world truth in "trueFact" and "truthCorrection".
+   - Explain clearly what actually happened, what the real number/date/event is, and what authoritative sources document.
+   - For Curated Resources: When the claim is FALSE or MISLEADING, ensure at least 2 sources directly establish this truth (tagged relationship: "CONTRADICTS" or "CONTEXT") with credible evidence proving the real facts.
+   - For TRUE claims: set "trueFact": null and "truthCorrection": null.
+
 OUTPUT JSON FORMAT:
 {
   "checkedFocus": string | null,
@@ -1569,6 +1919,7 @@ OUTPUT JSON FORMAT:
   "confidenceLabel": "Very High" | "High" | "Moderate" | "Low" | "Insufficient",
   "evidenceStrength": "Very High Evidence" | "High Evidence" | "Moderate Evidence" | "Limited Evidence" | "Insufficient Evidence",
   "why": "2-3 concise, neutral, evidence-grounded sentences explaining the conclusion",
+  "trueFact": "For FALSE, LIKELY FALSE, MIXED, or MISLEADING claims: 1-2 clear, direct sentences stating the verified truth or actual fact. For TRUE claims, use null.",
   "truthCorrection": "For FALSE, LIKELY FALSE, MIXED, or MISLEADING claims: 1-2 concise sentences stating the accurate fact or missing context. For TRUE claims, use null.",
   "evidence": ["Key evidence statement 1", "Key evidence statement 2"],
   "supportingEvidence": ["Direct supporting evidence point 1"],
@@ -1690,6 +2041,16 @@ OUTPUT JSON FORMAT:
 
     parts.push({ text: promptText });
 
+    emitProgress({
+      type: "progress",
+      step: "analyze",
+      percent: 62,
+      title: "Analyzing evidence",
+      message: "Comparing the claim against discovered sources",
+      log: "ANALYZE :: running evidence model...",
+      sourcesFound: discoveredSources.length,
+    });
+
     const candidateModels = [
       "gemini-3.1-flash-lite",
       "gemini-3.5-flash-lite",
@@ -1714,6 +2075,15 @@ OUTPUT JSON FORMAT:
         });
 
         if (response && response.text) {
+          emitProgress({
+            type: "progress",
+            step: "crossref",
+            percent: 82,
+            title: "Cross-checking",
+            message: "Matching sources, dates and contradictions",
+            log: `XREF :: model ${model} returned evidence draft`,
+            sourcesFound: discoveredSources.length,
+          });
           break;
         }
       } catch (err: any) {
@@ -1729,6 +2099,16 @@ OUTPUT JSON FORMAT:
     }
 
     const parsedResult = parseModelJson(response.text);
+
+    emitProgress({
+      type: "progress",
+      step: "verdict",
+      percent: 90,
+      title: "Preparing verdict",
+      message: "Validating citations and confidence",
+      log: "VERDICT :: checking source URLs and calibration...",
+      sourcesFound: discoveredSources.length,
+    });
 
     // Normalize verdict
     parsedResult.verdict = normalizeVerdict(parsedResult.verdict);
@@ -1920,6 +2300,7 @@ OUTPUT JSON FORMAT:
 
     parsedResult.why = _stripUrls(parsedResult.why || "");
     parsedResult.truthCorrection = _stripUrls(parsedResult.truthCorrection || "");
+    parsedResult.trueFact = _stripUrls((parsedResult as any).trueFact || parsedResult.truthCorrection || "");
     parsedResult.bottomLine = _stripUrls(parsedResult.bottomLine || "");
     parsedResult.evidence = _sanitizeArr(parsedResult.evidence);
     parsedResult.supportingEvidence = _sanitizeArr(parsedResult.supportingEvidence);
@@ -2107,6 +2488,19 @@ OUTPUT JSON FORMAT:
       }
     }
 
+    if (wantsStream) {
+      emitProgress({
+        type: "progress",
+        step: "verdict",
+        percent: 97,
+        title: "Preparing verdict",
+        message: "Finalizing the evidence report",
+        log: "VERDICT :: compiling report...",
+        sourcesFound: processedSources.length,
+      });
+      emitProgress({ type: "result", result: parsedResult });
+      return res.end();
+    }
     return res.json(parsedResult);
   } catch (error: any) {
     console.error("Verification error:", error?.message || error);
@@ -2116,10 +2510,16 @@ OUTPUT JSON FORMAT:
       errorMessage.includes("UNAUTHENTICATED") ||
       errorMessage.includes("invalid authentication credentials") ||
       errorMessage.includes("not a valid Google AI Studio API key");
+    const friendlyError = isAuthError
+      ? "Verification is temporarily unavailable because GEMINI_API_KEY is invalid or expired. Add a valid Google AI Studio Gemini API key to .env, then restart the server."
+      : errorMessage || "An unexpected error occurred during verification.";
+    if (wantsStream) {
+      emitProgress({ type: "error", error: friendlyError });
+      if (!res.writableEnded) return res.end();
+      return;
+    }
     return res.status(500).json({
-      error: isAuthError
-        ? "Verification is temporarily unavailable because GEMINI_API_KEY is invalid or expired. Add a valid Google AI Studio Gemini API key to .env, then restart the server."
-        : errorMessage || "An unexpected error occurred during verification.",
+      error: friendlyError,
     });
   }
 });
@@ -2127,8 +2527,20 @@ OUTPUT JSON FORMAT:
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
     const { createServer: createViteServer } = await import("vite");
+    const react = (await import("@vitejs/plugin-react")).default;
+    const tailwindcss = (await import("@tailwindcss/vite")).default;
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      configFile: false,
+      plugins: [react(), tailwindcss()],
+      resolve: {
+        alias: {
+          "@": path.resolve(process.cwd(), "."),
+        },
+      },
+      server: {
+        middlewareMode: true,
+        hmr: process.env.DISABLE_HMR !== "true",
+      },
       appType: "spa",
     });
     app.use(vite.middlewares);

@@ -179,6 +179,7 @@ export interface VerificationResult {
   positiveEvidenceFound?: boolean;
   why: string;
   truthCorrection?: string;
+  trueFact?: string;
   evidence: string[];
   supportingEvidence?: string[];
   contradictingEvidence?: string[];
@@ -218,6 +219,30 @@ export interface VerifyRequestPayload {
   text?: string;
   userContext?: string;
   file?: UploadedFileItem;
+}
+
+export interface TrendingNewsItem {
+  id: string;
+  title: string;
+  category: string;
+  badgeBg: string;
+  badgeText: string;
+  icon: string;
+  sourceName: string;
+  sourceUrl?: string;
+  publishedTime: string;
+}
+
+export interface VerificationProgressEvent {
+  type: "progress" | "result" | "error";
+  step?: "parse" | "search" | "analyze" | "crossref" | "verdict";
+  percent?: number;
+  title?: string;
+  message?: string;
+  log?: string;
+  sourcesFound?: number;
+  result?: VerificationResult;
+  error?: string;
 }
 
 export interface HistoryItem {

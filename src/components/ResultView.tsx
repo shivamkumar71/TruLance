@@ -22,6 +22,7 @@ import {
   Newspaper,
   Globe,
   Building2,
+  Sparkles,
 } from "lucide-react";
 import { VerificationResult, VerificationSource } from "../types";
 import { VerdictBadge } from "./VerdictBadge";
@@ -356,20 +357,33 @@ Verified by TruthLens — Evidence First.`;
           </p>
         </motion.div>
 
-        {result.truthCorrection && result.verdict !== "TRUE" && result.verdict !== "LIKELY TRUE" && (
+        {(result.trueFact || result.truthCorrection) && result.verdict !== "TRUE" && result.verdict !== "LIKELY TRUE" && (
           <motion.div
             variants={revealVariants}
             initial="hidden"
             animate="visible"
             transition={{ duration: 0.45, delay: 0.35, ease: "easeOut" }}
-            className="result-module-card border-teal-300/40 bg-teal-50/60 dark:border-teal-900/60 dark:bg-teal-950/20 p-6 sm:p-7"
+            className="result-module-card border-emerald-500/40 bg-gradient-to-r from-emerald-50/70 via-teal-50/50 to-cyan-50/40 dark:from-emerald-950/25 dark:via-teal-950/20 dark:to-cyan-950/15 p-6 sm:p-7 shadow-sm"
           >
-            <span className="text-[11px] font-bold uppercase tracking-wider text-teal-700 dark:text-teal-300 block mb-2">
-              What the evidence says instead
-            </span>
-            <p className="text-sm sm:text-base text-teal-950 dark:text-teal-100 leading-relaxed font-semibold">
-              {result.truthCorrection}
+            <div className="flex items-center gap-2 mb-2.5">
+              <span className="p-1 rounded-lg bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">
+                <Sparkles className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+              </span>
+              <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300">
+                Verified Truth & Accurate Fact
+              </span>
+              <span className="ml-auto px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
+                Fact-Checked Reality
+              </span>
+            </div>
+            <p className="text-sm sm:text-base text-slate-900 dark:text-emerald-50 leading-relaxed font-semibold">
+              {result.trueFact || result.truthCorrection}
             </p>
+            {result.truthCorrection && result.trueFact && result.truthCorrection !== result.trueFact && (
+              <p className="text-xs text-slate-600 dark:text-slate-400 mt-2 leading-relaxed">
+                {result.truthCorrection}
+              </p>
+            )}
           </motion.div>
         )}
 

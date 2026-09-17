@@ -10,7 +10,7 @@ import { VerificationLoader } from "./components/VerificationLoader";
 import { LegalModal } from "./components/LegalModal";
 import { Footer } from "./components/Footer";
 import { ThemeProvider } from "./context/ThemeContext";
-import { VerificationResult, VerifyRequestPayload, HistoryItem } from "./types";
+import { VerificationResult, VerifyRequestPayload, HistoryItem, VerificationProgressEvent } from "./types";
 import { motion, AnimatePresence } from "motion/react";
 
 const HISTORY_STORAGE_KEY = "truthlens-history-v1";
@@ -24,6 +24,7 @@ function MainApp() {
   const [apiError, setApiError] = useState<string | null>(null);
   const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
   const [legalModal, setLegalModal] = useState<"privacy" | "terms" | null>(null);
+  const [liveProgress, setLiveProgress] = useState<VerificationProgressEvent | null>(null);
 
   // Load history from localStorage
   useEffect(() => {
@@ -93,12 +94,22 @@ function MainApp() {
   const handleVerify = async (data: VerifyRequestPayload) => {
     setIsLoading(true);
     setApiError(null);
+    setLiveProgress({
+      type: "progress",
+      step: "parse",
+      percent: 4,
+      title: "Starting",
+      message: "Connecting to the verification engine",
+      log: "BOOT :: opening live progress stream...",
+    });
 
     try {
       const response = await fetch("/api/verify", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Accept: "text/event-stream",
+          "X-TruthLens-Stream": "1",
         },
         body: JSON.stringify({
           text: data.text,
@@ -122,7 +133,55 @@ function MainApp() {
         );
       }
 
-      const jsonResult: VerificationResult = await response.json();
+      const contentType = response.headers.get("content-type") || "";
+      let jsonResult: VerificationResult | null = null;
+
+      if (contentType.includes("text/event-stream") && response.body) {
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const chunks = buffer.split("\n\n");
+          buffer = chunks.pop() || "";
+
+          for (const chunk of chunks) {
+            const dataLine = chunk
+              .split("\n")
+              .find((line) => line.startsWith("data: "));
+            if (!dataLine) continue;
+            const payload = JSON.parse(dataLine.slice(6)) as VerificationProgressEvent;
+            if (payload.type === "progress") {
+              setLiveProgress(payload);
+            } else if (payload.type === "result" && payload.result) {
+              jsonResult = payload.result;
+            } else if (payload.type === "error") {
+              throw new Error(payload.error || "Verification failed.");
+            }
+          }
+        }
+
+        if (!jsonResult && buffer.trim()) {
+          const dataLine = buffer
+            .split("\n")
+            .find((line) => line.startsWith("data: "));
+          if (dataLine) {
+            const payload = JSON.parse(dataLine.slice(6)) as VerificationProgressEvent;
+            if (payload.type === "result" && payload.result) jsonResult = payload.result;
+            if (payload.type === "error") throw new Error(payload.error || "Verification failed.");
+          }
+        }
+      } else {
+        jsonResult = await response.json();
+      }
+
+      if (!jsonResult) {
+        throw new Error("Verification finished without a result. Please try again.");
+      }
+
       setResult(jsonResult);
       saveToHistory(jsonResult);
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -131,10 +190,10 @@ function MainApp() {
       setApiError(
         err.message || "Something went wrong while verifying this claim. Please try again."
       );
-      // stay on check workspace if error occurs
       setCurrentTab("check");
     } finally {
       setIsLoading(false);
+      setLiveProgress(null);
     }
   };
 
@@ -209,7 +268,7 @@ function MainApp() {
               transition={{ duration: 0.2 }}
               className="w-full"
             >
-              <VerificationLoader />
+              <VerificationLoader progress={liveProgress} />
             </motion.div>
           ) : result ? (
             <motion.div
