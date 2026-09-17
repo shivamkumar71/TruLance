@@ -14,6 +14,9 @@ import { VerificationResult, VerifyRequestPayload, HistoryItem, VerificationProg
 import { motion, AnimatePresence } from "motion/react";
 
 const HISTORY_STORAGE_KEY = "truthlens-history-v1";
+const RESULT_COMPLETION_DELAY_MS = 700;
+
+const wait = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
 
 export type NavTab = "home" | "check" | "how-it-works" | "features" | "history" | "about";
 
@@ -181,6 +184,19 @@ function MainApp() {
       if (!jsonResult) {
         throw new Error("Verification finished without a result. Please try again.");
       }
+
+      // Let the final loader step visibly complete before showing the report.
+      // Otherwise these updates are batched and the loader disappears instantly.
+      setLiveProgress({
+        type: "progress",
+        step: "verdict",
+        percent: 100,
+        title: "Verification complete",
+        message: "Evidence report is ready",
+        log: "VERDICT :: report ready",
+        sourcesFound: jsonResult.sources?.length || 0,
+      });
+      await wait(RESULT_COMPLETION_DELAY_MS);
 
       setResult(jsonResult);
       saveToHistory(jsonResult);

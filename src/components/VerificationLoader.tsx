@@ -68,7 +68,8 @@ export const VerificationLoader: React.FC<VerificationLoaderProps> = ({ progress
 
   const currentStepId = progress?.step || "parse";
   const currentStepIndex = Math.max(0, STEP_ORDER.indexOf(currentStepId));
-  const targetPercent = Math.max(2, Math.min(97, progress?.percent ?? 4));
+  const targetPercent = Math.max(2, Math.min(100, progress?.percent ?? 4));
+  const isComplete = (progress?.percent ?? 0) >= 100;
   const activeStep = STEPS[currentStepIndex] || STEPS[0];
   const activeLog =
     progress?.log ||
@@ -207,8 +208,8 @@ export const VerificationLoader: React.FC<VerificationLoaderProps> = ({ progress
 
       <div className="w-full max-w-md bg-white/90 dark:bg-[#0c1427]/90 backdrop-blur-md border border-slate-200/90 dark:border-slate-800/90 rounded-2xl p-5 shadow-lg shadow-slate-900/5 dark:shadow-black/20 space-y-3.5 text-left">
         {STEPS.map((step, idx) => {
-          const isDone = idx < currentStepIndex;
-          const isCurrent = idx === currentStepIndex;
+          const isDone = idx < currentStepIndex || (isComplete && idx === currentStepIndex);
+          const isCurrent = !isComplete && idx === currentStepIndex;
 
           return (
             <motion.div

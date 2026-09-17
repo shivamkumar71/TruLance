@@ -53,28 +53,29 @@ export const CheckWorkspace: React.FC<CheckWorkspaceProps> = ({
   const wordCount = claimText.trim() ? claimText.trim().split(/\s+/).length : 0;
   const charCount = claimText.length;
 
+  const loadNews = async (signal?: AbortSignal) => {
+    setNewsLoading(true);
+    try {
+      const response = await fetch(`/api/trending-news?t=${Date.now()}`, {
+        cache: "no-store",
+        signal,
+      });
+      if (!response.ok) throw new Error("News unavailable");
+      const data = await response.json();
+      setNewsItems(Array.isArray(data.news) ? data.news : []);
+      setNewsSource(data.source === "live" ? "live" : "curated");
+    } catch (error) {
+      if ((error as Error).name !== "AbortError") {
+        setNewsItems([]);
+      }
+    } finally {
+      if (!signal?.aborted) setNewsLoading(false);
+    }
+  };
+
   useEffect(() => {
     const controller = new AbortController();
-    const loadNews = async () => {
-      setNewsLoading(true);
-      try {
-        const response = await fetch(`/api/trending-news?t=${Date.now()}`, {
-          cache: "no-store",
-          signal: controller.signal,
-        });
-        if (!response.ok) throw new Error("News unavailable");
-        const data = await response.json();
-        setNewsItems(Array.isArray(data.news) ? data.news : []);
-        setNewsSource(data.source === "live" ? "live" : "curated");
-      } catch (error) {
-        if ((error as Error).name !== "AbortError") {
-          setNewsItems([]);
-        }
-      } finally {
-        if (!controller.signal.aborted) setNewsLoading(false);
-      }
-    };
-    loadNews();
+    loadNews(controller.signal);
     return () => controller.abort();
   }, []);
 
@@ -417,10 +418,17 @@ export const CheckWorkspace: React.FC<CheckWorkspaceProps> = ({
                       </span>
                     )}
                   </span>
-                  <span className="text-[11px] text-slate-400 dark:text-slate-500 inline-flex items-center gap-1">
-                    <RefreshCw className="w-3 h-3" />
-                    New on each visit
-                  </span>
+                  <button
+                    type="button"
+                    onClick={() => loadNews()}
+                    disabled={newsLoading}
+                    id="btn-refresh-trending-news"
+                    className="text-[11px] text-slate-500 dark:text-slate-400 inline-flex items-center gap-1 px-2 py-1 -mr-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-teal-700 dark:hover:text-teal-300 transition-colors cursor-pointer disabled:cursor-wait disabled:opacity-60"
+                    title="Refresh latest news"
+                  >
+                    <RefreshCw className={`w-3 h-3 ${newsLoading ? "animate-spin" : ""}`} />
+                    <span>{newsLoading ? "Refreshing..." : "Refresh"}</span>
+                  </button>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
