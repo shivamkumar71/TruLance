@@ -115,7 +115,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             </div>
             <div className="hero-reveal hero-delay-four mt-12 flex flex-wrap items-center gap-5">
               <button type="button" onClick={onNavigateToCheck} id="btn-hero-check-claim" className="hero-cta inline-flex items-center gap-2 rounded-xl bg-teal-400 px-7 py-3.5 text-sm font-bold text-slate-950 shadow-[0_10px_30px_rgba(45,212,191,0.22)] transition hover:-translate-y-0.5 hover:bg-teal-300">
-                Try the live demo <ArrowRight className="h-4 w-4" />
+                Try Now <ArrowRight className="h-4 w-4" />
               </button>
               <button type="button" onClick={onNavigateToHowItWorks} id="btn-hero-how-it-works" className="group inline-flex items-center gap-2 text-sm font-semibold text-slate-300 transition hover:text-teal-300">
                 See how it works <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1.5" />
