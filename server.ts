@@ -1,5 +1,4 @@
 import express from "express";
-import path from "path";
 import dotenv from "dotenv";
 import { GoogleGenAI } from "@google/genai";
 import mammoth from "mammoth";
@@ -20,7 +19,6 @@ import {
 dotenv.config();
 
 export const app = express();
-const PORT = 3000;
 
 // Body parser limits for large documents, PDFs, screenshots, and images
 app.use(express.json({ limit: "40mb" }));
@@ -2523,40 +2521,3 @@ OUTPUT JSON FORMAT:
     });
   }
 });
-
-async function startServer() {
-  if (process.env.NODE_ENV !== "production") {
-    const { createServer: createViteServer } = await import("vite");
-    const react = (await import("@vitejs/plugin-react")).default;
-    const tailwindcss = (await import("@tailwindcss/vite")).default;
-    const vite = await createViteServer({
-      configFile: false,
-      plugins: [react(), tailwindcss()],
-      resolve: {
-        alias: {
-          "@": path.resolve(process.cwd(), "."),
-        },
-      },
-      server: {
-        middlewareMode: true,
-        hmr: process.env.DISABLE_HMR !== "true",
-      },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
-  } else {
-    const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
-    app.get("*", (_req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
-    });
-  }
-
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`TruthLens server running on http://0.0.0.0:${PORT}`);
-  });
-}
-
-if (!process.env.AWS_LAMBDA_FUNCTION_NAME && !process.env.NETLIFY) {
-  startServer();
-}

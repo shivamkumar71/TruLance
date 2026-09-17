@@ -217,7 +217,8 @@ Recommended change loop:
 │   ├── main.tsx            # React entry point
 │   ├── types.ts            # Verification request and result contracts
 │   └── index.css           # Global styles and theme rules
-├── server.ts               # Express API, Gemini orchestration, and Vite host
+├── server.ts               # Express API and Gemini orchestration (safe for serverless imports)
+├── local-server.ts         # Standalone startup, Vite development host, and static serving
 ├── index.html              # Browser document entry point
 ├── package.json            # Scripts and dependencies
 ├── netlify.toml             # Netlify build, function, and redirect configuration
