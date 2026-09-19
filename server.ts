@@ -109,7 +109,7 @@ app.post("/api/feedback", async (req, res) => {
   if (name.length < 2 || name.length > 80) {
     return res.status(400).json({ error: "Please enter a name between 2 and 80 characters." });
   }
-  if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email) || email.length > 254) {
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) {
     return res.status(400).json({ error: "Please enter a valid email address." });
   }
   if (message.length < 10 || message.length > 3000) {
