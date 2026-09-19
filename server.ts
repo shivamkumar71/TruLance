@@ -31,8 +31,19 @@ async function getMongoDb(): Promise<Db> {
   if (!uri) throw new Error("MONGODB_URI environment variable is missing.");
 
   if (!mongoDbPromise) {
-    mongoClient = new MongoClient(uri);
-    mongoDbPromise = mongoClient.connect().then((client) => client.db(dbName));
+    mongoClient = new MongoClient(uri, {
+      serverSelectionTimeoutMS: 8000,
+      connectTimeoutMS: 8000,
+      socketTimeoutMS: 10000,
+      maxPoolSize: 5,
+    });
+    mongoDbPromise = mongoClient.connect()
+      .then((client) => client.db(dbName))
+      .catch((error) => {
+        mongoDbPromise = null;
+        mongoClient = null;
+        throw error;
+      });
   }
   return mongoDbPromise;
 }
@@ -127,7 +138,9 @@ app.post("/api/feedback", async (req, res) => {
     return res.status(201).json({ success: true });
   } catch (error) {
     console.error("Feedback storage error:", error);
-    return res.status(503).json({ error: "Feedback storage is temporarily unavailable. Please try again." });
+    return res.status(503).json({
+      error: "Feedback could not be submitted right now. Please check the MongoDB Atlas connection, database user credentials, and Network Access settings.",
+    });
   }
 });
 
