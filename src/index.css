@@ -652,3 +652,66 @@
   .tl-verdict-copy h1{font-size:28px}
   .tl-verdict-meta{grid-template-columns:1fr 1fr}
 }
+
+/* Evidence Trail — professional source table */
+.tl-source-table{background:#fff}
+.tl-source-head,.tl-source-row{
+  grid-template-columns:42px minmax(210px,1.25fr) minmax(250px,2fr) 135px 125px 125px 78px;
+}
+.tl-source-head{
+  min-height:52px;
+  align-items:center;
+  background:#f4f7fc;
+  color:#52627e;
+  letter-spacing:.01em;
+}
+.tl-source-row{
+  min-height:88px;
+  padding:13px 12px;
+  background:#fff;
+}
+.tl-source-row:hover{background:#f9fbff}
+.tl-source-identity{display:flex;align-items:center;gap:10px;min-width:0}
+.tl-source-avatar{
+  width:34px;height:34px;flex:0 0 34px;border-radius:9px;
+  display:flex;align-items:center;justify-content:center;
+  background:#edf3ff;border:1px solid #d9e5fb;color:#285fc7;
+  font-size:10px;font-weight:900;
+}
+.tl-source-publisher{min-width:0;display:flex;flex-direction:column;gap:3px}
+.tl-source-publisher strong{
+  font-size:12px;line-height:1.2;color:#18305c;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.tl-source-publisher span{
+  font-size:9px;color:#8995a9;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.tl-source-description{
+  min-width:0;font-size:11px;line-height:1.4;color:#29436f;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+}
+.tl-source-date{font-size:10px;line-height:1.35;color:#536783}
+.tl-source-type{font-size:10px;line-height:1.35;color:#536783}
+.tl-source-actions{display:flex;justify-content:flex-end}
+.tl-open-btn{
+  min-width:66px;justify-content:center;
+  padding:7px 10px;border-radius:8px;
+  font-size:10px;
+}
+.tl-rel-pill{padding:6px 9px;font-size:9px;white-space:nowrap}
+.dark .tl-source-table{background:#0d1728}
+.dark .tl-source-head{background:#15243c;color:#aebdd4}
+.dark .tl-source-row{background:#0d1728}
+.dark .tl-source-row:hover{background:#111e33}
+.dark .tl-source-avatar{background:#152744;border-color:#2d456c;color:#9fbeff}
+.dark .tl-source-publisher strong{color:#edf3ff}
+.dark .tl-source-publisher span{color:#8292ab}
+.dark .tl-source-description,.dark .tl-source-date,.dark .tl-source-type{color:#b9c8dc}
+@media(max-width:1100px){
+ .tl-source-head,.tl-source-row{grid-template-columns:38px 1.2fr 1.7fr 110px 110px 105px 70px}
+}
+@media(max-width:900px){
+ .tl-source-table{overflow-x:auto}
+ .tl-source-head,.tl-source-row{min-width:900px}
+}
