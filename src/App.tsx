@@ -314,7 +314,7 @@ function MainApp() {
               transition={{ duration: 0.2 }}
               className="w-full"
             >
-              <ResultView result={result} onReset={handleReset} inputPreviewUrl={resultPreviewUrl} />
+              <ResultView result={result} onReset={handleReset} onHome={() => handleTabChange("home")} inputPreviewUrl={resultPreviewUrl} />
             </motion.div>
           ) : currentTab === "check" ? (
             <motion.div
