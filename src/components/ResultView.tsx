@@ -13,16 +13,18 @@ const relation = (s:VerificationSource) => { const r=(s.relationship||"NEUTRAL")
 const sourceType = (s:VerificationSource) => { const h=host(s.url||s.canonicalUrl),c=(s.category||"").toLowerCase(); if(c.includes("official")||/\.gov(\.in)?$|\.nic\.in$|\.mil$/.test(h)||/who\.int|un\.org|nasa\.gov/.test(h))return"Government / Official"; if(c.includes("research")||/nature\.com|science\.org|arxiv\.org|nih\.gov|pubmed/.test(h))return"Research"; if(c.includes("fact"))return"Fact Check"; if(c.includes("news"))return"News Article"; if(c.includes("historical"))return"Archive / Context"; return"Web Source"; };
 
 const SourceRow:React.FC<{source:VerificationSource;index:number}>=({source,index})=>{ 
+ const[logoFailed,setLogoFailed]=useState(false);
  const url=safeUrl(source.url||source.canonicalUrl);
  const rel=relation(source),RelIcon=rel.icon;
  const publisher=text(source.publisher)||host(url)||"Source";
  const domain=host(url);
  const title=text(source.title)||"Verified source record";
  const initials=publisher.split(/\\s+/).filter(Boolean).slice(0,2).map(x=>x[0]).join("").toUpperCase();
+ const logoUrl=domain?`https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=64`:null;
  return <div className="tl-source-row">
   <div className="tl-source-rank">{index+1}</div>
   <div className="tl-source-identity">
-   <div className="tl-source-avatar">{initials||"S"}</div>
+   <div className="tl-source-avatar">{logoUrl&&!logoFailed?<img src={logoUrl} alt={`${publisher} logo`} onError={()=>setLogoFailed(true)}/>:<span>{initials||"S"}</span>}</div>
    <div className="tl-source-publisher"><strong>{publisher}</strong>{domain&&<span>{domain}</span>}</div>
   </div>
   <div className="tl-source-description" title={title}>{title}</div>
@@ -41,9 +43,9 @@ export const ResultView:React.FC<ResultViewProps>=({result,onReset,inputPreviewU
  const meta=verdictMeta(result.verdict),VerdictIcon=meta.icon,isMedia=result.contentType==="image",hasDocument=result.contentType==="pdf"||result.contentType==="document";
  const evidenceTotal=supporting.length+contradicting.length+context.length;
  const independent=result.searchTransparency?.independentSourcesFound??new Set(verifiedSources.map(s=>s.independence)).size;
- const supportCount=result.searchTransparency?.supportingSourcesFound??sources.filter(s=>s.relationship==="SUPPORTS").length;
- const contradictCount=result.searchTransparency?.contradictingSourcesFound??sources.filter(s=>s.relationship==="CONTRADICTS").length;
- const relatedCount=sources.filter(s=>s.relationship==="CONTEXT").length;
+ const supportCount=result.searchTransparency?.supportingSourcesFound??sources.filter(s=>s.relationship?.toUpperCase()==="SUPPORTS").length;
+ const contradictCount=result.searchTransparency?.contradictingSourcesFound??sources.filter(s=>s.relationship?.toUpperCase()==="CONTRADICTS").length;
+ const relatedCount=sources.filter(s=>s.relationship?.toUpperCase()==="CONTEXT").length;
 
  const copyReport=async()=>{const lines=["TruthLens Verification Report","",`Verdict: ${result.verdict}`,`Claim: ${text(result.claim)}`,`Evidence strength: ${result.evidenceStrength||"Not specified"}`,`Confidence: ${result.confidence}%`,"",`Why: ${text(result.why)}`,supporting.length?`\\nSupporting:\\n${supporting.map(x=>`• ${text(x)}`).join("\\n")}`:"",contradicting.length?`\\nContradicting:\\n${contradicting.map(x=>`• ${text(x)}`).join("\\n")}`:"",context.length?`\\nContext:\\n${context.map(x=>`• ${text(x)}`).join("\\n")}`:"",`\\nSources:\\n${verifiedSources.map(s=>`• ${text(s.publisher)||host(s.url)} — ${text(s.title)} — ${s.url}`).join("\\n")||"No validated source URLs available."}`].join("\\n");try{await navigator.clipboard.writeText(lines);setCopied(true);window.setTimeout(()=>setCopied(false),1600);}catch{}};
  const share=async()=>{try{if(navigator.share)await navigator.share({title:"TruthLens Verification",text:`TruthLens: ${result.verdict} — ${text(result.claim)}`});else await navigator.clipboard.writeText(`TruthLens: ${result.verdict} — ${text(result.claim)}`);}catch{}};
@@ -68,12 +70,22 @@ export const ResultView:React.FC<ResultViewProps>=({result,onReset,inputPreviewU
   </div>
 
   <div className="tl-two-col">
-   <section className="tl-panel tl-graph"><div className="tl-panel-title"><h2>Evidence Graph</h2><span>i</span><button className="tl-help">⊕ How to read?</button></div><div className="tl-graph-stage"><div className="tl-graph-node claim"><b>Claim</b><span>{text(result.claim).slice(0,90)}{text(result.claim).length>90?"…":""}</span></div><div className="tl-graph-sources">{sources.filter(s=>["SUPPORTS","CONTRADICTS","CONTEXT"].includes(s.relationship||"")).slice(0,3).map((s,i)=>{const r=relation(s);return <div className="tl-graph-source" key={i}><span className={r.cls}>{r.label}</span><b>{text(s.publisher)||host(s.url)}</b><small>{text(s.title).slice(0,52)}</small></div>;})}{sources.length===0&&<div className="tl-graph-empty">No validated evidence nodes available.</div>}</div><div className="tl-graph-conclusion"><b>Conclusion</b><span>{text(result.bottomLine||result.why).slice(0,180)}</span></div></div></section>
+   <section className="tl-panel tl-graph">
+    <div className="tl-panel-title"><h2>Evidence Graph</h2><span>i</span><button className="tl-help">⊕ How to read?</button></div>
+    <div className="tl-graph-stage">
+     <div className="tl-graph-legend"><span><i className="tl-legend-dot support"/> Supports</span><span><i className="tl-legend-dot contradict"/> Contradicts</span><span><i className="tl-legend-dot related"/> Context</span></div>
+     <div className="tl-graph-node tl-graph-claim"><span className="tl-node-kicker">VERIFIED CLAIM</span><b>{text(result.claim).slice(0,100)}{text(result.claim).length>100?"…":""}</b></div>
+     <div className="tl-graph-connector tl-graph-connector-down"><span/></div>
+     <div className="tl-graph-sources">{sources.filter(s=>["SUPPORTS","CONTRADICTS","CONTEXT"].includes((s.relationship||"").toUpperCase())).slice(0,3).map((s,i)=>{const r=relation(s);const RelIcon=r.icon;return <div className={`tl-graph-source ${r.cls}`} key={i}><div className="tl-graph-source-head"><span><RelIcon className="w-3 h-3"/>{r.label}</span><i>Source {i+1}</i></div><b>{text(s.publisher)||host(s.url)||"Verified source"}</b><small>{text(s.title).slice(0,68)}{text(s.title).length>68?"…":""}</small></div>;})}{sources.length===0&&<div className="tl-graph-empty">No validated evidence nodes available.</div>}</div>
+     {sources.length>0&&<div className="tl-graph-connector tl-graph-connector-up"><span/></div>}
+     <div className="tl-graph-conclusion"><span className="tl-node-kicker">EVIDENCE-BASED CONCLUSION</span><b>{meta.label}</b><p>{text(result.bottomLine||result.why).slice(0,155)}{text(result.bottomLine||result.why).length>155?"…":""}</p></div>
+    </div>
+   </section>
 
    <section className="tl-panel tl-comparison"><div className="tl-panel-title"><h2>{isMedia?"Image Comparison":"Input Comparison"}</h2><span className="tl-side-badge">Side-by-side analysis</span></div><div className="tl-compare-grid"><div className="tl-compare-item">{inputPreviewUrl?<img src={inputPreviewUrl} alt=""/>:<div className="tl-compare-empty"><ImageIcon/></div>}<b>Your Input</b><small>{isMedia?"(Submitted Image)":"(Submitted Claim)"}</small></div><div className="tl-compare-item"><div className="tl-compare-empty"><Search/></div><b>Reference Evidence</b><small>{verifiedSources[0]?text(verifiedSources[0].publisher):"No reference media available"}</small></div></div><div className="tl-compare-note"><ShieldCheck className="w-4 h-4"/> TruthLens only shows reference media when an actual media asset is available.</div></section>
   </div>
 
-  {timeline.length>0&&<section className="tl-panel tl-timeline"><div className="tl-panel-title"><h2>Timeline</h2></div><div className="tl-timeline-track">{timeline.slice(0,5).map((item,i)=><div className="tl-timeline-item" key={i}><span className="tl-timeline-dot"/><b>{text(item.date)}</b><p>{text(item.event)}</p></div>)}</div></section>}
+  <section className="tl-panel tl-timeline"><div className="tl-panel-title"><h2>Timeline</h2></div>{timeline.length>0?<div className="tl-timeline-track">{timeline.slice(0,5).map((item,i)=><div className="tl-timeline-item" key={i}><span className="tl-timeline-dot"/><b>{text(item.date)}</b><p>{text(item.event)}</p></div>)}</div>:<div className="tl-timeline-empty">No dated events were returned for this verification.</div>}</section>
 
   <section className="tl-panel tl-trail"><div className="tl-panel-title"><h2>Evidence Trail <small>(Top Sources)</small></h2><span className="tl-count-badge">{verifiedSources.length} validated</span></div><div className="tl-source-table"><div className="tl-source-head"><span>#</span><span>Source</span><span>Title / Description</span><span>Date</span><span>Relationship</span><span>Type</span><span>Actions</span></div>{verifiedSources.slice(0,6).map((s,i)=><SourceRow source={s} index={i} key={i}/>)}{verifiedSources.length===0&&<div className="tl-no-sources"><ShieldAlert className="w-5 h-5"/><div><b>No validated source URLs</b><p>TruthLens will not display an invented or unvalidated source link.</p></div></div>}</div></section>
 
