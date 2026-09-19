@@ -2,6 +2,7 @@ import express from "express";
 import dotenv from "dotenv";
 import { GoogleGenAI } from "@google/genai";
 import mammoth from "mammoth";
+import { MongoClient, Db } from "mongodb";
 import { promises as fs } from "fs";
 import path from "path";
 import {
@@ -19,6 +20,55 @@ import {
 } from "./src/types";
 
 dotenv.config();
+
+// MongoDB is server-side only. Keep MONGODB_URI and MONGODB_DB in local .env / Netlify env vars.
+let mongoClient: MongoClient | null = null;
+let mongoDbPromise: Promise<Db> | null = null;
+
+async function getMongoDb(): Promise<Db> {
+  const uri = process.env.MONGODB_URI?.trim();
+  const dbName = process.env.MONGODB_DB?.trim() || "truthlens";
+  if (!uri) throw new Error("MONGODB_URI environment variable is missing.");
+
+  if (!mongoDbPromise) {
+    mongoClient = new MongoClient(uri);
+    mongoDbPromise = mongoClient.connect().then((client) => client.db(dbName));
+  }
+  return mongoDbPromise;
+}
+
+async function saveVerificationQuery(result: VerificationResult, input: {
+  text?: string;
+  userContext?: string;
+  mimeType?: string;
+  fileName?: string;
+}): Promise<void> {
+  try {
+    if (!process.env.MONGODB_URI?.trim()) return;
+    const db = await getMongoDb();
+    await db.collection("queries").insertOne({
+      query: String(input.text || input.userContext || result.claim || "").slice(0, 10000),
+      inputType: input.mimeType?.startsWith("image/")
+        ? "image"
+        : input.mimeType?.includes("pdf") || input.fileName?.toLowerCase().endsWith(".pdf")
+          ? "pdf"
+          : input.fileName?.toLowerCase().endsWith(".docx") || input.mimeType?.includes("wordprocessingml")
+            ? "docx"
+            : "text",
+      fileName: input.fileName || undefined,
+      claim: result.claim,
+      result,
+      verdict: result.verdict,
+      confidence: result.confidence,
+      evidenceStrength: result.evidenceStrength,
+      sourcesCount: result.sources?.length || 0,
+      createdAt: new Date(),
+    });
+  } catch (error) {
+    // Database persistence must never break an otherwise successful verification.
+    console.error("Verification query storage error:", error);
+  }
+}
 
 export const app = express();
 
@@ -51,8 +101,6 @@ app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", service: "TruthLens", timestamp: new Date().toISOString() });
 });
 
-const feedbackFilePath = path.join(process.cwd(), "data", "feedback.json");
-
 app.post("/api/feedback", async (req, res) => {
   const name = String(req.body?.name || "").trim().replace(/\s+/g, " ");
   const email = String(req.body?.email || "").trim().toLowerCase();
@@ -61,30 +109,28 @@ app.post("/api/feedback", async (req, res) => {
   if (name.length < 2 || name.length > 80) {
     return res.status(400).json({ error: "Please enter a name between 2 and 80 characters." });
   }
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) {
+  if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email) || email.length > 254) {
     return res.status(400).json({ error: "Please enter a valid email address." });
   }
   if (message.length < 10 || message.length > 3000) {
     return res.status(400).json({ error: "Feedback must be between 10 and 3,000 characters." });
   }
 
-  const entry = { id: `feedback-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, name, email, message, submittedAt: new Date().toISOString() };
   try {
-    await fs.mkdir(path.dirname(feedbackFilePath), { recursive: true });
-    let existing: unknown[] = [];
-    try {
-      const raw = await fs.readFile(feedbackFilePath, "utf8");
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) existing = parsed;
-    } catch (error: any) {
-      if (error?.code !== "ENOENT") throw error;
-    }
-    await fs.writeFile(feedbackFilePath, JSON.stringify([...existing, entry].slice(-1000), null, 2) + "\n", "utf8");
+    const db = await getMongoDb();
+    await db.collection("feedbacks").insertOne({
+      name,
+      email,
+      message,
+      createdAt: new Date(),
+    });
     return res.status(201).json({ success: true });
   } catch (error) {
     console.error("Feedback storage error:", error);
-    return res.status(500).json({ error: "Feedback could not be saved. Please try again." });
+    return res.status(503).json({ error: "Feedback storage is temporarily unavailable. Please try again." });
   }
+});
+
 });
 
 function decodeXmlEntities(value: string): string {
@@ -2571,6 +2617,8 @@ OUTPUT JSON FORMAT:
           "The claim cannot currently be verified because reliable evidence was not found in authoritative records.";
       }
     }
+
+    await saveVerificationQuery(parsedResult, { text, userContext, mimeType, fileName });
 
     if (wantsStream) {
       emitProgress({
