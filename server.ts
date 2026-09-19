@@ -131,8 +131,6 @@ app.post("/api/feedback", async (req, res) => {
   }
 });
 
-});
-
 function decodeXmlEntities(value: string): string {
   return value
     .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
