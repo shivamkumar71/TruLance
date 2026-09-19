@@ -1,28 +1,10 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
-  ArrowLeft,
-  ExternalLink,
-  Calendar,
-  Copy,
-  Check,
-  ChevronDown,
-  ChevronUp,
-  AlertCircle,
-  FileSearch,
-  Image as ImageIcon,
-  Clock,
-  CheckCircle2,
-  AlertTriangle,
-  Info,
-  ShieldCheck,
-  Landmark,
-  FlaskConical,
-  Scale,
-  Library,
-  Newspaper,
-  Globe,
-  Building2,
-  Sparkles,
+  ArrowLeft, ExternalLink, Copy, Check, ChevronDown, ChevronUp,
+  AlertCircle, Calendar, CheckCircle2, AlertTriangle, Info,
+  ShieldCheck, Landmark, FlaskConical, Scale, Library, Newspaper,
+  Globe, FileSearch, Image as ImageIcon, Clock, Link2, Search,
+  Sparkles, ShieldAlert, GitCompareArrows
 } from "lucide-react";
 import { VerificationResult, VerificationSource } from "../types";
 import { VerdictBadge } from "./VerdictBadge";
@@ -34,276 +16,220 @@ interface ResultViewProps {
   onReset: () => void;
 }
 
-const cleanSourceText = (value?: string | null): string => {
-  if (!value) return "";
-
-  const namedEntities: Record<string, string> = {
-    amp: "&",
-    apos: "'",
-    gt: ">",
-    lt: "<",
-    nbsp: " ",
-    quot: '"',
-  };
-
-  return value
-    .replace(/&#(\d+);/g, (_, code: string) => String.fromCodePoint(Number(code)))
-    .replace(/&#x([\da-f]+);/gi, (_, code: string) => String.fromCodePoint(parseInt(code, 16)))
-    .replace(/&([a-z]+);/gi, (match: string, name: string) => namedEntities[name.toLowerCase()] || match)
+const cleanText = (value?: string | null) =>
+  (value || "")
     .replace(/<[^>]+>/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'")
     .replace(/\s+/g, " ")
     .trim();
-};
 
-const revealVariants = {
-  hidden: { opacity: 0, y: 18 },
-  visible: { opacity: 1, y: 0 },
-};
-
-// Domain Type classification & Authority Favicon component
-const SourceFavicon: React.FC<{ source: VerificationSource }> = ({ source }) => {
-  const [imgError, setImgError] = useState(false);
-
-  let hostname = "";
-  if (source.url) {
-    try {
-      hostname = new URL(source.url).hostname.toLowerCase().replace(/^www\./, "");
-    } catch {}
+const safeUrl = (value?: string | null): string | null => {
+  if (!value) return null;
+  try {
+    const u = new URL(value);
+    if (u.protocol !== "https:" && u.protocol !== "http:") return null;
+    if (!u.hostname || u.hostname === "example.com" || u.hostname === "localhost") return null;
+    return u.toString();
+  } catch {
+    return null;
   }
+};
 
+const hostnameOf = (url?: string | null) => {
+  const clean = safeUrl(url);
+  if (!clean) return "";
+  try { return new URL(clean).hostname.replace(/^www\./, ""); } catch { return ""; }
+};
+
+const sourceKind = (source: VerificationSource) => {
+  const host = hostnameOf(source.url || source.canonicalUrl);
   const category = (source.category || "").toLowerCase();
-  const tier = (source.tier || "").toLowerCase();
-  const publisher = (source.publisher || "").toLowerCase();
-
-  // Determine Domain Authority Category
-  const isGov =
-    hostname.endsWith(".gov") ||
-    hostname.endsWith(".gov.in") ||
-    hostname.endsWith(".nic.in") ||
-    hostname.endsWith(".mil") ||
-    hostname.includes("pmo.gov") ||
-    hostname.includes("who.int") ||
-    hostname.includes("un.org") ||
-    category === "official" ||
-    tier.includes("official") ||
-    publisher.includes("government") ||
-    publisher.includes("ministry") ||
-    publisher.includes("nasa") ||
-    publisher.includes("white house");
-
-  const isScience =
-    hostname.includes("nature.com") ||
-    hostname.includes("science.org") ||
-    hostname.includes("cell.com") ||
-    hostname.includes("thelancet.com") ||
-    hostname.includes("arxiv.org") ||
-    hostname.includes("nih.gov") ||
-    hostname.endsWith(".edu") ||
-    category === "research" ||
-    category === "peer-reviewed" ||
-    tier.includes("peer-reviewed");
-
-  const isFactCheck =
-    category === "fact check" ||
-    hostname.includes("snopes.com") ||
-    hostname.includes("factcheck.org") ||
-    hostname.includes("politifact.com") ||
-    hostname.includes("boomlive.in") ||
-    hostname.includes("altnews.in") ||
-    hostname.includes("afp.com") ||
-    publisher.includes("fact check") ||
-    publisher.includes("snopes") ||
-    publisher.includes("politifact");
-
-  const isArchive =
-    hostname.includes("wikipedia.org") ||
-    hostname.includes("archive.org") ||
-    category === "historical context";
-
-  let IconComponent = Newspaper;
-  let domainBadgeBg = "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800/60";
-  let domainLabel = "News / Media";
-
-  if (isGov) {
-    IconComponent = Landmark;
-    domainBadgeBg = "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/60";
-    domainLabel = "Official / Gov";
-  } else if (isScience) {
-    IconComponent = FlaskConical;
-    domainBadgeBg = "bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800/60";
-    domainLabel = "Scientific / Journal";
-  } else if (isFactCheck) {
-    IconComponent = Scale;
-    domainBadgeBg = "bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800/60";
-    domainLabel = "Fact-Check Org";
-  } else if (isArchive) {
-    IconComponent = Library;
-    domainBadgeBg = "bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800/60";
-    domainLabel = "Archive / Wiki";
+  if (category.includes("official") || /\.gov(\.in)?$|\.nic\.in$|\.mil$/.test(host) || /who\.int|un\.org|nasa\.gov/.test(host)) {
+    return { label: "Primary / Official", icon: Landmark, cls: "source-kind-official" };
   }
+  if (category.includes("research") || /nature\.com|science\.org|arxiv\.org|nih\.gov|pubmed/.test(host)) {
+    return { label: "Research", icon: FlaskConical, cls: "source-kind-research" };
+  }
+  if (category.includes("fact") || /snopes\.com|factcheck\.org|politifact\.com|boomlive\.in|altnews\.in|afp\.com/.test(host)) {
+    return { label: "Fact-check", icon: Scale, cls: "source-kind-factcheck" };
+  }
+  if (category.includes("historical") || /wikipedia\.org|archive\.org/.test(host)) {
+    return { label: "Archive / Context", icon: Library, cls: "source-kind-context" };
+  }
+  if (category.includes("news")) return { label: "News / Reporting", icon: Newspaper, cls: "source-kind-news" };
+  return { label: "Web source", icon: Globe, cls: "source-kind-web" };
+};
 
-  const faviconUrl = hostname ? `https://www.google.com/s2/favicons?domain=${hostname}&sz=32` : null;
+const relationshipMeta = (relationship?: string) => {
+  switch ((relationship || "NEUTRAL").toUpperCase()) {
+    case "SUPPORTS": return { label: "Supports claim", cls: "rel-support", icon: CheckCircle2 };
+    case "CONTRADICTS": return { label: "Contradicts claim", cls: "rel-contradict", icon: AlertTriangle };
+    case "CONTEXT": return { label: "Adds context", cls: "rel-context", icon: Info };
+    default: return { label: "Neutral", cls: "rel-neutral", icon: Info };
+  }
+};
+
+const verdictTone = (verdict: string) => {
+  const v = verdict.toUpperCase();
+  if (v === "TRUE" || v === "LIKELY TRUE") return "result-hero-true";
+  if (v === "FALSE" || v === "LIKELY FALSE" || v === "MISLEADING") return "result-hero-false";
+  return "result-hero-neutral";
+};
+
+const SourceCard: React.FC<{ source: VerificationSource }> = ({ source }) => {
+  const [faviconError, setFaviconError] = useState(false);
+  const url = safeUrl(source.url || source.canonicalUrl);
+  const host = hostnameOf(url);
+  const kind = sourceKind(source);
+  const rel = relationshipMeta(source.relationship);
+  const KindIcon = kind.icon;
+  const RelIcon = rel.icon;
+  const favicon = host ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=64` : null;
+  const isVerified = Boolean(source.isVerified && url);
 
   return (
-    <div className="flex items-center gap-1.5">
-      <div
-        className={`w-6 h-6 rounded-md flex items-center justify-center shrink-0 border overflow-hidden ${domainBadgeBg}`}
-        title={`${domainLabel} (${hostname || source.publisher || "Domain"})`}
-      >
-        {faviconUrl && !imgError ? (
-          <img
-            src={faviconUrl}
-            alt=""
-            className="w-4 h-4 object-contain"
-            onError={() => setImgError(true)}
-            referrerPolicy="no-referrer"
-          />
-        ) : (
-          <IconComponent className="w-3.5 h-3.5" />
-        )}
+    <article className="result-source-card-v2">
+      <div className="flex items-start gap-3">
+        <div className={`source-favicon-v2 ${kind.cls}`}>
+          {favicon && !faviconError ? (
+            <img src={favicon} alt="" onError={() => setFaviconError(true)} referrerPolicy="no-referrer" />
+          ) : <KindIcon className="w-4 h-4" />}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
+            <span className={`source-kind-pill ${kind.cls}`}><KindIcon className="w-3 h-3" />{kind.label}</span>
+            <span className={`source-relation-pill ${rel.cls}`}><RelIcon className="w-3 h-3" />{rel.label}</span>
+            {isVerified && <span className="source-verified-pill"><ShieldCheck className="w-3 h-3" />Validated URL</span>}
+          </div>
+          <h4 className="text-sm font-bold leading-snug text-slate-900 dark:text-slate-100">
+            {cleanText(source.title) || "Verified source"}
+          </h4>
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-500 dark:text-slate-400">
+            <span className="font-semibold">{cleanText(source.publisher) || host || "Web source"}</span>
+            {source.date && <><span>•</span><span>{cleanText(source.date)}</span></>}
+            {host && <><span>•</span><span className="font-mono">{host}</span></>}
+          </div>
+          {(source.evidenceSummary || source.relevance || source.summary) && (
+            <p className="mt-3 text-xs leading-relaxed text-slate-600 dark:text-slate-300">
+              {cleanText(source.evidenceSummary || source.relevance || source.summary)}
+            </p>
+          )}
+          <div className="mt-3 flex items-center justify-between gap-3">
+            <span className="text-[10px] text-slate-400 dark:text-slate-500">
+              {source.independence ? `${source.independence} source` : "Source relationship shown above"}
+            </span>
+            {isVerified ? (
+              <a
+                href={url!}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-bold text-teal-700 dark:text-teal-300 bg-teal-500/10 hover:bg-teal-500/15 border border-teal-500/20 transition-colors"
+              >
+                Open original <ExternalLink className="w-3 h-3" />
+              </a>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold text-slate-400 bg-slate-100 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700">
+                <ShieldAlert className="w-3 h-3" /> Source URL unavailable
+              </span>
+            )}
+          </div>
+        </div>
       </div>
-      <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold border hidden sm:inline-flex items-center gap-1 ${domainBadgeBg}`}>
-        <IconComponent className="w-2.5 h-2.5" />
-        {domainLabel}
-      </span>
+    </article>
+  );
+};
+
+const EvidenceList: React.FC<{ title: string; items: string[]; tone: "support" | "contradict" | "context" }> = ({ title, items, tone }) => {
+  if (!items.length) return null;
+  const meta = tone === "support"
+    ? { icon: CheckCircle2, cls: "evidence-support-v2" }
+    : tone === "contradict"
+      ? { icon: AlertTriangle, cls: "evidence-contradict-v2" }
+      : { icon: Info, cls: "evidence-context-v2" };
+  const Icon = meta.icon;
+  return (
+    <div className={`result-evidence-panel-v2 ${meta.cls}`}>
+      <h3><Icon className="w-4 h-4" />{title}</h3>
+      <ul>{items.map((item, i) => <li key={i}>{cleanText(item)}</li>)}</ul>
     </div>
   );
 };
 
 export const ResultView: React.FC<ResultViewProps> = ({ result, onReset }) => {
   const [copied, setCopied] = useState(false);
-  const [showDetails, setShowDetails] = useState(false);
+  const [showAudit, setShowAudit] = useState(false);
 
-  const handleCopy = () => {
-    const text = `TruthLens Verification Report:
-Claim: "${result.claim}"
-Verdict: ${result.verdict} (${result.confidence}% Evidence Confidence - ${result.confidenceLabel || "Calibrated"})
-
-Why: ${result.why}
-
-${result.supportingEvidence && result.supportingEvidence.length > 0 ? `Supporting Evidence:\n${result.supportingEvidence.map((e) => `• ${e}`).join("\n")}\n\n` : ""}${result.contradictingEvidence && result.contradictingEvidence.length > 0 ? `Contradicting Evidence:\n${result.contradictingEvidence.map((e) => `• ${e}`).join("\n")}\n\n` : ""}${result.contextEvidence && result.contextEvidence.length > 0 ? `Important Context:\n${result.contextEvidence.map((e) => `• ${e}`).join("\n")}\n\n` : ""}Sources:
-${result.sources?.map((s) => `• ${s.publisher || "Source"}: "${s.title}" ${s.url ? `(${s.url})` : "[Exact source page could not be verified]"}`).join("\n")}
-
-${result.truthCorrection ? `What the evidence says instead:\n${result.truthCorrection}\n\n` : ""}
-Bottom Line: ${result.bottomLine || result.why}
-
-Verified by TruthLens — Evidence First.`;
-
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const isImageAnalysis = Boolean(result.imageAnalysis) && (result.contentType === "image" || Boolean(result.imageAnalysis?.isAuthentic));
-  const isDocumentAnalysis = Boolean(result.documentAnalysis) || result.contentType === "pdf" || result.contentType === "document";
-  const hasDisputedPoints = result.disputedPoints && result.disputedPoints.length > 0;
-  const hasTimeline = result.timelineItems && result.timelineItems.length > 0;
-  const hasTransparency = Boolean(result.searchTransparency);
-  const hasDetailedAnalysis =
-    result.detailedAnalysis &&
-    (result.detailedAnalysis.reasoning ||
-      result.detailedAnalysis.sourceComparison ||
-      result.detailedAnalysis.conflictingEvidence ||
-      result.detailedAnalysis.factChecks?.length);
-
-  const normalizedVerdict = result.verdict.toUpperCase();
-  const verdictTone = normalizedVerdict === "TRUE" || normalizedVerdict === "LIKELY TRUE"
-    ? "result-hero-true"
-    : normalizedVerdict === "FALSE" || normalizedVerdict === "LIKELY FALSE" || normalizedVerdict === "MISLEADING"
-    ? "result-hero-false"
-    : "result-hero-neutral";
-
-  // Evidence groupings
   const supporting = result.supportingEvidence || [];
   const contradicting = result.contradictingEvidence || [];
-  const context = result.contextEvidence || [];
+  const context = result.contextEvidence || result.context || [];
   const generalEvidence = result.evidence || [];
-  const hasCategorizedEvidence = supporting.length > 0 || contradicting.length > 0 || context.length > 0;
+  const sources = useMemo(
+    () => (result.sources || []).filter((s) => Boolean(s.title || s.url || s.canonicalUrl)),
+    [result.sources]
+  );
 
-  const getRelationshipBadge = (rel?: string) => {
-    const normalized = (rel || "").toUpperCase();
-    if (normalized === "SUPPORTS") {
-      return (
-        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20">
-          Supports
-        </span>
-      );
-    }
-    if (normalized === "CONTRADICTS") {
-      return (
-        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/10 text-rose-700 dark:text-rose-300 border border-rose-500/20">
-          Contradicts
-        </span>
-      );
-    }
-    return (
-      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
-        Context
-      </span>
-    );
+  const verifiedSourceCount = sources.filter((s) => Boolean(s.isVerified && safeUrl(s.url || s.canonicalUrl))).length;
+  const sourceCount = sources.length;
+  const hasEvidence = supporting.length + contradicting.length + context.length + generalEvidence.length > 0;
+  const hasTimeline = Boolean(result.timelineItems?.length || result.timeline?.length);
+  const timeline = result.timelineItems || result.timeline || [];
+  const hasImage = Boolean(result.imageAnalysis || result.imageAssessment || result.contentType === "image");
+  const hasDocument = Boolean(result.documentAnalysis || result.documentAssessment || result.contentType === "pdf" || result.contentType === "document");
+  const hasAudit = Boolean(result.searchTransparency || result.detailedAnalysis || result.disputedPoints?.length || result.uncertainties?.length || hasTimeline);
+
+  const handleCopy = async () => {
+    const sourceText = sources.map((s) => {
+      const u = safeUrl(s.url || s.canonicalUrl);
+      return `• ${cleanText(s.publisher) || "Source"} — ${cleanText(s.title)}${u ? ` — ${u}` : ""}`;
+    }).join("\n");
+    const text = [
+      "TruthLens Verification Report",
+      "",
+      `Claim: "${result.claim}"`,
+      `Verdict: ${result.verdict}`,
+      `Evidence confidence: ${result.confidence}%`,
+      `Evidence strength: ${result.evidenceStrength || "Not specified"}`,
+      "",
+      `Why: ${result.why}`,
+      supporting.length ? `\nSupporting evidence:\n${supporting.map(x => `• ${x}`).join("\n")}` : "",
+      contradicting.length ? `\nContradicting evidence:\n${contradicting.map(x => `• ${x}`).join("\n")}` : "",
+      context.length ? `\nContext:\n${context.map(x => `• ${x}`).join("\n")}` : "",
+      `\nSources:\n${sourceText || "No validated source URL available."}`,
+      result.bottomLine ? `\nBottom line: ${result.bottomLine}` : ""
+    ].join("\n");
+    try { await navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1800); } catch {}
   };
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 16 }}
+      initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.35, ease: "easeOut" }}
-      className="page-surface w-full max-w-3xl mx-auto px-4 py-8 sm:py-10"
+      transition={{ duration: 0.35 }}
+      className="result-page-v2 w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-10"
     >
-      {/* Top Action Bar */}
-      <div className="flex items-center justify-between gap-3 mb-6">
-        <motion.button
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          onClick={onReset}
-          id="btn-result-new-check"
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:text-slate-900 dark:hover:text-white bg-white dark:bg-[#0b1329] border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 shadow-2xs transition-all cursor-pointer"
-        >
-          <ArrowLeft className="w-3.5 h-3.5" />
-          <span>New Check</span>
-        </motion.button>
-
-        <motion.button
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          onClick={handleCopy}
-          id="btn-result-copy-report"
-          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-white dark:bg-[#0b1329] border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 transition-colors shadow-2xs cursor-pointer"
-        >
-          {copied ? (
-            <>
-              <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-              <span className="text-emerald-600 dark:text-emerald-400 font-bold">Copied</span>
-            </>
-          ) : (
-            <>
-              <Copy className="w-3.5 h-3.5" />
-              <span>Copy</span>
-            </>
-          )}
-        </motion.button>
+      <div className="result-toolbar-v2">
+        <button onClick={onReset} className="result-toolbar-btn"><ArrowLeft className="w-4 h-4" /> New check</button>
+        <button onClick={handleCopy} className="result-toolbar-btn">
+          {copied ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
+          {copied ? "Copied" : "Copy report"}
+        </button>
       </div>
 
-      {/* Main Verification Report Container */}
-      <div className="mb-6 space-y-4">
-        {/* 1. TOP: VERDICT & CONFIDENCE */}
-        <motion.div
-          variants={revealVariants}
-          initial="hidden"
-          animate="visible"
-          transition={{ duration: 0.5, ease: "easeOut" }}
-          className={`result-hero-card ${verdictTone} p-6 sm:p-8 rounded-3xl flex flex-col sm:flex-row sm:items-center justify-between gap-6`}
-        >
-          <div>
-            <span className="result-eyebrow block mb-2">
-              Verification verdict
-            </span>
-            <VerdictBadge verdict={result.verdict} size="lg" />
-            <p className="mt-3 max-w-md text-xs text-slate-500 dark:text-slate-400">
-              Calibrated against the available evidence and source agreement.
-            </p>
+      <section className={`result-hero-v2 ${verdictTone(result.verdict)}`}>
+        <div className="result-hero-content-v2">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="result-trust-chip"><ShieldCheck className="w-3.5 h-3.5" /> Evidence-backed report</span>
+            {result.analyzedAt && <span className="result-time-chip">Checked {new Date(result.analyzedAt).toLocaleString()}</span>}
           </div>
-
+          <p className="result-eyebrow mb-2">Verification verdict</p>
+          <VerdictBadge verdict={result.verdict} size="lg" />
+          <p className="mt-4 max-w-2xl text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+            The verdict reflects the evidence retrieved for this claim. A high confidence score does not mean certainty; the underlying sources remain visible below.
+          </p>
+        </div>
+        <div className="result-confidence-v2">
           <ConfidenceMeter
             score={result.confidence}
             evidenceStrength={result.evidenceStrength}
@@ -311,495 +237,158 @@ Verified by TruthLens — Evidence First.`;
             claimType={result.claimType}
             verificationDifficulty={result.verificationDifficulty}
           />
-        </motion.div>
-
-        {/* 2. CLAIM */}
-        <motion.div
-          variants={revealVariants}
-          initial="hidden"
-          animate="visible"
-          transition={{ duration: 0.45, delay: 0.2, ease: "easeOut" }}
-          className="result-module-card result-claim-card p-6 sm:p-7"
-        >
-          <span className="result-eyebrow block mb-2">
-            Claim
-          </span>
-          <p className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-50 leading-snug">
-            "{result.claim}"
-          </p>
-          {result.normalizedClaim && result.normalizedClaim !== result.claim && (
-            <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
-              <span className="font-semibold text-slate-600 dark:text-slate-300">Normalized Assertion:</span>{" "}
-              {result.normalizedClaim}
-            </p>
-          )}
-          {result.checkedFocus && (
-            <div className="mt-2.5 inline-flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 px-2.5 py-1 rounded-md font-medium">
-              <span>Context requested:</span>
-              <span className="font-semibold">{result.checkedFocus}</span>
-            </div>
-          )}
-        </motion.div>
-
-        {/* 3. WHY? */}
-        <motion.div
-          variants={revealVariants}
-          initial="hidden"
-          animate="visible"
-          transition={{ duration: 0.45, delay: 0.3, ease: "easeOut" }}
-          className="result-module-card p-6 sm:p-7"
-        >
-          <span className="result-eyebrow block mb-2">
-            Why?
-          </span>
-          <p className="text-sm sm:text-base text-slate-700 dark:text-slate-300 leading-relaxed font-normal">
-            {result.why}
-          </p>
-        </motion.div>
-
-        {(result.trueFact || result.truthCorrection) && result.verdict !== "TRUE" && result.verdict !== "LIKELY TRUE" && (
-          <motion.div
-            variants={revealVariants}
-            initial="hidden"
-            animate="visible"
-            transition={{ duration: 0.45, delay: 0.35, ease: "easeOut" }}
-            className="result-module-card border-emerald-500/40 bg-gradient-to-r from-emerald-50/70 via-teal-50/50 to-cyan-50/40 dark:from-emerald-950/25 dark:via-teal-950/20 dark:to-cyan-950/15 p-6 sm:p-7 shadow-sm"
-          >
-            <div className="flex items-center gap-2 mb-2.5">
-              <span className="p-1 rounded-lg bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">
-                <Sparkles className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-              </span>
-              <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300">
-                Verified Truth & Accurate Fact
-              </span>
-              <span className="ml-auto px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
-                Fact-Checked Reality
-              </span>
-            </div>
-            <p className="text-sm sm:text-base text-slate-900 dark:text-emerald-50 leading-relaxed font-semibold">
-              {result.trueFact || result.truthCorrection}
-            </p>
-            {result.truthCorrection && result.trueFact && result.truthCorrection !== result.trueFact && (
-              <p className="text-xs text-slate-600 dark:text-slate-400 mt-2 leading-relaxed">
-                {result.truthCorrection}
-              </p>
-            )}
-          </motion.div>
-        )}
-
-        {/* 4. EVIDENCE (Supporting, Contradicting, Important Context) */}
-        <motion.div
-          variants={revealVariants}
-          initial="hidden"
-          animate="visible"
-          transition={{ duration: 0.45, delay: 0.4, ease: "easeOut" }}
-          className="result-module-card p-6 sm:p-7 space-y-4"
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 block">
-              Evidence Breakdown
-            </span>
-            {result.verdict === "UNVERIFIED" && (
-              <span className="text-[11px] text-amber-600 dark:text-amber-400 font-medium">
-                Absence of contradiction is not proof of truth
-              </span>
-            )}
+          <div className="result-mini-stats">
+            <div><strong>{sourceCount}</strong><span>sources</span></div>
+            <div><strong>{verifiedSourceCount}</strong><span>validated URLs</span></div>
+            <div><strong>{result.evidenceStrength ? result.evidenceStrength.replace(" Evidence", "") : "—"}</strong><span>evidence</span></div>
           </div>
+        </div>
+      </section>
 
-          {hasCategorizedEvidence ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {/* Supporting Evidence */}
-              {supporting.length > 0 && (
-                <div className="result-evidence-card result-evidence-support space-y-2">
-                  <h4 className="text-xs font-bold text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5 uppercase tracking-wider">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                    <span>Supporting Evidence</span>
-                  </h4>
-                  <ul className="space-y-2 pl-5">
-                    {supporting.map((point, idx) => (
-                      <li key={idx} className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 list-disc leading-relaxed">
-                        {point}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {/* Contradicting Evidence */}
-              {contradicting.length > 0 && (
-                <div className="result-evidence-card result-evidence-warning space-y-2 pt-1">
-                  <h4 className="text-xs font-bold text-rose-700 dark:text-rose-400 flex items-center gap-1.5 uppercase tracking-wider">
-                    <AlertTriangle className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400 shrink-0" />
-                    <span>Contradicting Evidence</span>
-                  </h4>
-                  <ul className="space-y-2 pl-5">
-                    {contradicting.map((point, idx) => (
-                      <li key={idx} className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 list-disc leading-relaxed">
-                        {point}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {/* Context Evidence */}
-              {context.length > 0 && (
-                <div className="result-evidence-card result-evidence-context space-y-2 pt-1">
-                  <h4 className="text-xs font-bold text-slate-700 dark:text-slate-400 flex items-center gap-1.5 uppercase tracking-wider">
-                    <Info className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-                    <span>Important Context</span>
-                  </h4>
-                  <ul className="space-y-2 pl-5">
-                    {context.map((point, idx) => (
-                      <li key={idx} className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 list-disc leading-relaxed">
-                        {point}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          ) : generalEvidence.length > 0 ? (
-            <ul className="space-y-2.5">
-              {generalEvidence.map((point, idx) => {
-                const isContradiction =
-                  point.toLowerCase().includes("no reliable evidence") ||
-                  point.toLowerCase().includes("refutes") ||
-                  point.toLowerCase().includes("false") ||
-                  point.toLowerCase().includes("contradicts");
-
-                return (
-                  <li
-                    key={idx}
-                    className="flex items-start gap-2.5 text-xs sm:text-sm text-slate-700 dark:text-slate-300"
-                  >
-                    {isContradiction ? (
-                      <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-                    ) : (
-                      <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                    )}
-                    <span className="leading-relaxed">{point}</span>
-                  </li>
-                );
-              })}
-            </ul>
-          ) : (
-            <p className="text-xs text-slate-500 dark:text-slate-400 italic">
-              Limited direct evidence available in public records.
-            </p>
-          )}
-        </motion.div>
-
-        {/* 5. IMAGE CHECK / DOCUMENT CHECK (Only for file inputs) */}
-        {(isImageAnalysis || result.imageAssessment || result.imageAnalysis) && (
-          <div className="p-6 sm:p-7 border-b border-slate-100 dark:border-slate-800/80 bg-blue-50/20 dark:bg-blue-950/20 space-y-3">
-            <div className="flex items-center gap-2">
-              <ImageIcon className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-              <span className="text-[11px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
-                Image Verification & Forensics
-              </span>
-            </div>
-
-            <div className="space-y-2 text-xs sm:text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
-              {(result.imageAssessment?.authenticityRating || result.imageAnalysis?.authenticityRating) && (
-                <p>
-                  <strong>Visual Authenticity:</strong>{" "}
-                  <span className="px-2.5 py-0.5 rounded-md bg-blue-100/80 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 font-semibold inline-block">
-                    {result.imageAssessment?.authenticityRating || result.imageAnalysis?.authenticityRating}
-                  </span>
-                </p>
-              )}
-              {(result.imageAssessment?.captionAccuracy || result.imageAnalysis?.captionAccuracy) && (
-                <p>
-                  <strong>Caption & Context Alignment:</strong>{" "}
-                  {result.imageAssessment?.captionAccuracy || result.imageAnalysis?.captionAccuracy}
-                </p>
-              )}
-              {(result.imageAssessment?.notes || result.imageAnalysis?.notes) && (
-                <p>
-                  <strong>Forensic Notes:</strong>{" "}
-                  {result.imageAssessment?.notes || result.imageAnalysis?.notes}
-                </p>
-              )}
-              <p className="text-[11px] text-slate-500 dark:text-slate-400 pt-1">
-                TruthLens strictly separates visual authenticity from factual truth: an authentic photograph can accompany a false claim, and a misleading claim does not automatically imply image manipulation.
-              </p>
-            </div>
-          </div>
-        )}
-
-        {(isDocumentAnalysis || result.documentAssessment || result.documentAnalysis) && (
-          <div className="p-6 sm:p-7 border-b border-slate-100 dark:border-slate-800/80 bg-blue-50/20 dark:bg-blue-950/20 space-y-3">
-            <div className="flex items-center gap-2">
-              <FileSearch className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-              <span className="text-[11px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
-                Document Details
-              </span>
-            </div>
-            {((result.documentAssessment?.extractedClaims && result.documentAssessment.extractedClaims.length > 0) ||
-              (result.documentAnalysis?.extractedClaims && result.documentAnalysis.extractedClaims.length > 0)) && (
-              <div>
-                <strong className="text-xs text-slate-800 dark:text-slate-200">Extracted Assertions:</strong>
-                <ul className="list-disc list-inside space-y-1 text-xs text-slate-600 dark:text-slate-400 mt-1 pl-1">
-                  {(result.documentAssessment?.extractedClaims || result.documentAnalysis?.extractedClaims || []).map((cl, i) => (
-                    <li key={i}>{cl}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* 6. SOURCES */}
-        <motion.div
-          variants={revealVariants}
-          initial="hidden"
-          animate="visible"
-          transition={{ duration: 0.45, delay: 0.6, ease: "easeOut" }}
-          className="result-module-card p-6 sm:p-7"
-        >
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 block">
-                Sources
-              </span>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-medium">
-                {!result.sources || result.sources.length === 0
-                  ? "Reliable evidence was not found"
-                  : result.sources.length === 1
-                  ? "1 strong source found"
-                  : result.sources.length === 2
-                  ? "2 independent sources found"
-                  : `${result.sources.length}+ independent sources evaluated`}
-              </p>
-            </div>
-          </div>
-
-          {result.sources && result.sources.length > 0 ? (
-            <div className="grid grid-cols-1 gap-3">
-              {result.sources.map((source: VerificationSource, index: number) => {
-                const effectiveUrl = source.canonicalUrl || source.url;
-                const hasValidUrl =
-                  effectiveUrl &&
-                  typeof effectiveUrl === "string" &&
-                  (effectiveUrl.startsWith("http://") || effectiveUrl.startsWith("https://"));
-
-                const sourceDate = source.publishedDate || source.date;
-                const displayTitle = cleanSourceText(source.title);
-                const displayPublisher = cleanSourceText(source.publisher);
-                const summaryText = cleanSourceText(source.summary || source.evidenceSummary || source.relevance);
-                const tierDisplay = source.sourceTier || source.tier;
-
-                return (
-                  <div
-                    key={index}
-                    className="result-source-card p-4 rounded-2xl bg-slate-50/70 dark:bg-slate-900/60 border border-slate-200/90 dark:border-slate-800 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 group"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                        <SourceFavicon source={source} />
-                        {displayPublisher && (
-                          <span className="font-bold text-xs text-slate-900 dark:text-slate-100">
-                            {displayPublisher}
-                          </span>
-                        )}
-                        {getRelationshipBadge(source.relationship)}
-                        {source.category && (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-200/80 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
-                            {source.category}
-                          </span>
-                        )}
-                        {tierDisplay && (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60">
-                            {tierDisplay.split(":")[0]}
-                          </span>
-                        )}
-                        {source.independence === "Syndicated" && (
-                          <span className="px-1.5 py-0.5 rounded text-[9px] font-medium bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
-                            Syndicated Wire
-                          </span>
-                        )}
-                        {sourceDate && (
-                          <span className="text-[11px] text-slate-400 dark:text-slate-500 flex items-center gap-1">
-                            <Calendar className="w-3 h-3" />
-                            {sourceDate}
-                          </span>
-                        )}
-                      </div>
-
-                      <h4 className="text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors leading-snug">
-                        {hasValidUrl ? (
-                          <a
-                            href={effectiveUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="hover:underline focus:outline-hidden"
-                          >
-                            "{displayTitle}"
-                          </a>
-                        ) : (
-                          <span>"{displayTitle}"</span>
-                        )}
-                      </h4>
-
-                      {summaryText && (
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
-                          {summaryText}
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="shrink-0 pt-1 sm:pt-0">
-                      {hasValidUrl ? (
-                        <a
-                          href={effectiveUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-teal-50 dark:bg-teal-950/50 hover:bg-teal-100 dark:hover:bg-teal-900/60 text-teal-700 dark:text-teal-300 text-xs font-bold transition-colors cursor-pointer border border-teal-200 dark:border-teal-800/80"
-                        >
-                          <span>Open Source</span>
-                          <ExternalLink className="w-3.5 h-3.5 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
-                        </a>
-                      ) : (
-                        <span className="text-[11px] text-slate-400 dark:text-slate-500 italic">
-                          Exact source page unverified
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900 text-xs text-slate-500 dark:text-slate-400 text-center">
-              Reliable external evidence was not found for this specific claim.
-            </div>
-          )}
-        </motion.div>
-
-        {/* 7. BOTTOM LINE */}
-        {result.bottomLine && (
-          <div className="p-6 sm:p-7 bg-slate-50/60 dark:bg-slate-900/60">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 block mb-1.5">
-              Bottom Line
-            </span>
-            <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 leading-relaxed">
-              {result.bottomLine}
-            </p>
-          </div>
-        )}
-
-        {/* 8. Expandable Details (Nuances, Timeline, Forensics, Search Audit) */}
-        {(hasDetailedAnalysis || hasDisputedPoints || hasTimeline || hasTransparency) && (
-          <div className="border-t border-slate-100 dark:border-slate-800/80 bg-slate-50/40 dark:bg-slate-950/20">
-            <button
-              onClick={() => setShowDetails(!showDetails)}
-              className="w-full px-6 py-3.5 flex items-center justify-between text-xs font-bold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer"
-            >
-              <span>Details & Investigation Context</span>
-              {showDetails ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-            </button>
-
-            {showDetails && (
-              <div className="p-6 pt-2 space-y-4 text-xs sm:text-sm text-slate-700 dark:text-slate-300 border-t border-slate-100 dark:border-slate-800/60 animate-in fade-in">
-                {/* Search Transparency & Multi-Stage Pipeline Audit */}
-                {result.searchTransparency && (
-                  <div className="p-3.5 rounded-xl bg-slate-100/70 dark:bg-slate-900/70 border border-slate-200 dark:border-slate-800 text-xs">
-                    <h5 className="font-bold text-slate-900 dark:text-slate-100 mb-2 flex items-center gap-1.5">
-                      <FileSearch className="w-3.5 h-3.5 text-blue-500" />
-                      <span>Search & Evidence Pipeline Audit</span>
-                    </h5>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-2.5">
-                      <div className="p-2 rounded-lg bg-white dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60">
-                        <span className="text-[10px] text-slate-400 dark:text-slate-500 block font-medium">Reference Date</span>
-                        <span className="font-bold text-slate-800 dark:text-slate-200">{result.searchTransparency.temporalReferenceDate || "September 1, 2026"}</span>
-                      </div>
-                      <div className="p-2 rounded-lg bg-white dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60">
-                        <span className="text-[10px] text-slate-400 dark:text-slate-500 block font-medium">Discovered Sources</span>
-                        <span className="font-bold text-slate-800 dark:text-slate-200">{result.searchTransparency.sourcesFound}</span>
-                      </div>
-                      <div className="p-2 rounded-lg bg-white dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60">
-                        <span className="text-[10px] text-slate-400 dark:text-slate-500 block font-medium">Official Sources</span>
-                        <span className="font-bold text-emerald-600 dark:text-emerald-400">{result.searchTransparency.officialSourcesFound}</span>
-                      </div>
-                      <div className="p-2 rounded-lg bg-white dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60">
-                        <span className="text-[10px] text-slate-400 dark:text-slate-500 block font-medium">Independent Sources</span>
-                        <span className="font-bold text-blue-600 dark:text-blue-400">{result.searchTransparency.independentSourcesFound}</span>
-                      </div>
-                    </div>
-                    {result.searchTransparency.queriesUsed && result.searchTransparency.queriesUsed.length > 0 && (
-                      <div className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
-                        <span className="font-semibold text-slate-700 dark:text-slate-300">Staged Research Queries:</span>
-                        <ul className="list-disc list-inside mt-1 space-y-0.5 font-mono text-[10px] text-slate-600 dark:text-slate-400">
-                          {result.searchTransparency.queriesUsed.map((q, idx) => (
-                            <li key={idx} className="truncate">{q}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
-                )}
-                {hasDisputedPoints && (
-                  <div>
-                    <h5 className="font-bold text-slate-900 dark:text-slate-100 mb-1.5 flex items-center gap-1.5">
-                      <AlertCircle className="w-3.5 h-3.5 text-amber-500" />
-                      <span>Nuances & Disputed Elements</span>
-                    </h5>
-                    <ul className="list-disc list-inside space-y-1 text-slate-600 dark:text-slate-400 pl-1">
-                      {result.disputedPoints!.map((p, i) => (
-                        <li key={i}>{p}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {result.detailedAnalysis?.reasoning && (
-                  <div>
-                    <h5 className="font-bold text-slate-900 dark:text-slate-100 mb-1">
-                      Forensic Reasoning
-                    </h5>
-                    <p className="leading-relaxed text-slate-600 dark:text-slate-400">
-                      {result.detailedAnalysis.reasoning}
-                    </p>
-                  </div>
-                )}
-
-                {hasTimeline && (
-                  <div>
-                    <h5 className="font-bold text-slate-900 dark:text-slate-100 mb-2 flex items-center gap-1.5">
-                      <Clock className="w-3.5 h-3.5 text-blue-500" />
-                      <span>Documented Timeline</span>
-                    </h5>
-                    <div className="space-y-2 border-l-2 border-slate-200 dark:border-slate-800 pl-3">
-                      {result.timelineItems!.map((item, idx) => (
-                        <div key={idx} className="text-xs">
-                          <span className="font-bold text-blue-600 dark:text-blue-400">
-                            {item.date}:
-                          </span>{" "}
-                          <span className="text-slate-600 dark:text-slate-400">{item.event}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
+      <div className="result-trust-note">
+        <ShieldCheck className="w-4 h-4 shrink-0" />
+        <span><strong>How to read this:</strong> TruthLens is an evidence-assisted verification tool, not a truth oracle. When reliable evidence is insufficient or conflicting, the report can surface uncertainty instead of treating missing evidence as proof.</span>
       </div>
 
-      {/* Bottom CTA */}
-      <div className="flex justify-center">
-        <motion.button
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          onClick={onReset}
-          className="px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-bold shadow-md shadow-blue-500/20 transition-all cursor-pointer flex items-center gap-2"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          <span>Verify Another Claim</span>
+      <section className="result-card-v2 result-claim-v2">
+        <div className="result-section-head-v2"><span>01</span><h2>Claim being checked</h2></div>
+        <blockquote>“{cleanText(result.claim)}”</blockquote>
+        {result.normalizedClaim && result.normalizedClaim !== result.claim && (
+          <div className="result-secondary-row"><span>Normalized assertion</span><p>{cleanText(result.normalizedClaim)}</p></div>
+        )}
+        {result.checkedFocus && (
+          <div className="result-focus-chip"><Search className="w-3.5 h-3.5" /> Focus: <strong>{cleanText(result.checkedFocus)}</strong></div>
+        )}
+        <div className="result-meta-grid">
+          {result.claimType && <div><span>Claim type</span><strong>{result.claimType}</strong></div>}
+          {result.verificationDifficulty && <div><span>Verification difficulty</span><strong>{result.verificationDifficulty}</strong></div>}
+          {result.confidenceLabel && <div><span>Confidence label</span><strong>{result.confidenceLabel}</strong></div>}
+        </div>
+      </section>
+
+      <section className="result-card-v2">
+        <div className="result-section-head-v2"><span>02</span><h2>Why this verdict?</h2></div>
+        <p className="result-lead-v2">{cleanText(result.why)}</p>
+        {(result.trueFact || result.truthCorrection) && result.verdict !== "TRUE" && result.verdict !== "LIKELY TRUE" && (
+          <div className="result-correction-v2">
+            <div className="flex items-center gap-2 mb-2"><Sparkles className="w-4 h-4 text-teal-500" /><strong>What the evidence indicates</strong></div>
+            <p>{cleanText(result.trueFact || result.truthCorrection)}</p>
+          </div>
+        )}
+        {result.bottomLine && (
+          <div className="result-bottom-line-v2"><span>Bottom line</span><p>{cleanText(result.bottomLine)}</p></div>
+        )}
+      </section>
+
+      <section className="result-card-v2">
+        <div className="result-section-head-v2"><span>03</span><h2>Evidence breakdown</h2></div>
+        {!hasEvidence ? (
+          <div className="result-empty-v2"><Info className="w-5 h-5" /><div><strong>Evidence is limited</strong><p>No structured evidence points were returned. Review the source trail and uncertainty before relying on the verdict.</p></div></div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+            <EvidenceList title="Supporting evidence" items={supporting.length ? supporting : []} tone="support" />
+            <EvidenceList title="Contradicting evidence" items={contradicting.length ? contradicting : []} tone="contradict" />
+            <EvidenceList title="Important context" items={context.length ? context : []} tone="context" />
+          </div>
+        )}
+        {!supporting.length && !contradicting.length && !context.length && generalEvidence.length > 0 && (
+          <ul className="result-general-evidence-v2">{generalEvidence.map((x,i) => <li key={i}>{cleanText(x)}</li>)}</ul>
+        )}
+      </section>
+
+      <section className="result-card-v2">
+        <div className="result-section-head-v2">
+          <span>04</span><h2>Source trail</h2>
+          <span className="ml-auto result-count-pill">{verifiedSourceCount} validated</span>
+        </div>
+        <div className="result-source-intro">
+          <div><ShieldCheck className="w-5 h-5 text-teal-500" /><div><strong>Only validated source URLs are presented as clickable evidence.</strong><p>Each source is shown with its publisher, relationship to the claim, and available provenance.</p></div></div>
+          {result.searchTransparency?.independentSourcesFound !== undefined && (
+            <span className="result-independence-pill"><GitCompareArrows className="w-3.5 h-3.5" /> {result.searchTransparency.independentSourcesFound} independent</span>
+          )}
+        </div>
+        {sources.length ? (
+          <div className="space-y-3">{sources.map((source, i) => <SourceCard source={source} key={`${source.url || source.title}-${i}`} />)}</div>
+        ) : (
+          <div className="result-empty-v2"><Link2 className="w-5 h-5" /><div><strong>No validated source was returned</strong><p>TruthLens should not invent or display a source link when it cannot validate the source page.</p></div></div>
+        )}
+      </section>
+
+      {(hasImage || hasDocument) && (
+        <section className="result-card-v2">
+          <div className="result-section-head-v2"><span>05</span><h2>Content analysis</h2></div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {hasImage && result.imageAnalysis && (
+              <div className="result-analysis-box-v2"><div className="flex items-center gap-2"><ImageIcon className="w-4 h-4 text-teal-500" /><strong>Image assessment</strong></div><p>{cleanText(result.imageAnalysis.visualContext || result.imageAnalysis.notes || result.imageAnalysis.isAuthentic || result.imageAnalysis.authenticityRating || "Visual assessment available.")}</p>{result.imageAnalysis.originEstablished !== undefined && <span>Origin established: {result.imageAnalysis.originEstablished ? "Yes" : "No"}</span>}</div>
+            )}
+            {hasDocument && (result.documentAnalysis || result.documentAssessment) && (
+              <div className="result-analysis-box-v2"><div className="flex items-center gap-2"><FileSearch className="w-4 h-4 text-teal-500" /><strong>Document assessment</strong></div><p>{cleanText((result.documentAnalysis || result.documentAssessment)?.notes || (result.documentAnalysis || result.documentAssessment)?.tablesSummary || "Document content was included in the verification workflow.")}</p>{(result.documentAnalysis || result.documentAssessment)?.extractedClaims?.length ? <span>{(result.documentAnalysis || result.documentAssessment)!.extractedClaims!.length} extracted claims</span> : null}</div>
+            )}
+          </div>
+        </section>
+      )}
+
+      {hasTimeline && (
+        <section className="result-card-v2">
+          <div className="result-section-head-v2"><span>06</span><h2>Timeline & context</h2></div>
+          <div className="result-timeline-v2">
+            {timeline.map((item, i) => <div key={i} className="result-timeline-item-v2"><div className="result-timeline-dot" /><div><span>{cleanText(item.date)}</span><p>{cleanText(item.event)}</p></div></div>)}
+          </div>
+        </section>
+      )}
+
+      {hasAudit && (
+        <section className="result-card-v2 result-audit-v2">
+          <button className="result-audit-toggle" onClick={() => setShowAudit(v => !v)}>
+            <span><span className="result-section-number">07</span><span><strong>Research & audit details</strong><small>Search transparency, uncertainty and investigation context</small></span></span>
+            {showAudit ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </button>
+          <AnimatePresence initial={false}>
+            {showAudit && (
+              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+                <div className="pt-5 space-y-5">
+                  {result.searchTransparency && (
+                    <div>
+                      <h3 className="audit-heading"><Search className="w-4 h-4" />Search transparency</h3>
+                      <div className="audit-stat-grid">
+                        <div><strong>{result.searchTransparency.sourcesFound}</strong><span>found</span></div>
+                        <div><strong>{result.searchTransparency.sourcesEvaluated}</strong><span>evaluated</span></div>
+                        <div><strong>{result.searchTransparency.officialSourcesFound}</strong><span>official</span></div>
+                        <div><strong>{result.searchTransparency.independentSourcesFound}</strong><span>independent</span></div>
+                      </div>
+                      {result.searchTransparency.temporalContext && <p className="audit-copy">{cleanText(result.searchTransparency.temporalContext)}</p>}
+                      {result.searchTransparency.queriesUsed?.length ? <details className="mt-3"><summary>Research queries used</summary><ul>{result.searchTransparency.queriesUsed.map((q,i)=><li key={i}>{cleanText(q)}</li>)}</ul></details> : null}
+                    </div>
+                  )}
+                  {(result.disputedPoints?.length || result.uncertainties?.length) ? (
+                    <div><h3 className="audit-heading"><AlertCircle className="w-4 h-4 text-amber-500" />Uncertainties & disputed points</h3><ul className="audit-list">{(result.disputedPoints || result.uncertainties || []).map((x,i)=><li key={i}>{cleanText(x)}</li>)}</ul></div>
+                  ) : null}
+                  {result.detailedAnalysis && (
+                    <div className="space-y-3">
+                      {result.detailedAnalysis.reasoning && <div><h3 className="audit-heading">Reasoning</h3><p className="audit-copy">{cleanText(result.detailedAnalysis.reasoning)}</p></div>}
+                      {result.detailedAnalysis.sourceComparison && <div><h3 className="audit-heading">Source comparison</h3><p className="audit-copy">{cleanText(result.detailedAnalysis.sourceComparison)}</p></div>}
+                      {result.detailedAnalysis.conflictingEvidence && <div><h3 className="audit-heading">Conflicting evidence</h3><p className="audit-copy">{cleanText(result.detailedAnalysis.conflictingEvidence)}</p></div>}
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </section>
+      )}
+
+      <div className="result-disclaimer-v2">
+        <ShieldAlert className="w-4 h-4 shrink-0" />
+        <p><strong>Important:</strong> AI-assisted verification can make mistakes. For high-stakes decisions, open the original sources and verify the underlying evidence yourself.</p>
+      </div>
+
+      <div className="flex justify-center pt-2">
+        <motion.button whileHover={{ y: -1 }} whileTap={{ scale: 0.98 }} onClick={onReset} className="result-primary-cta">
+          <ArrowLeft className="w-4 h-4" /> Verify another claim
         </motion.button>
       </div>
     </motion.div>
   );
 };
+
+export default ResultView;
