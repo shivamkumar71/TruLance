@@ -109,6 +109,8 @@ export interface VerificationSource {
   independence?: "Independent" | "Direct" | "Syndicated";
   relevanceScore?: number;
   isVerified?: boolean;
+  /** Open Graph / Twitter image found on the verified source page, when available. */
+  referenceImageUrl?: string;
 }
 
 export interface FactCheckRecord {

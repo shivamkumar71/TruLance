@@ -2,6 +2,8 @@ import express from "express";
 import dotenv from "dotenv";
 import { GoogleGenAI } from "@google/genai";
 import mammoth from "mammoth";
+import { promises as fs } from "fs";
+import path from "path";
 import {
   VerdictType,
   VerificationResult,
@@ -47,6 +49,42 @@ function getAI(): GoogleGenAI {
 // API Health Check
 app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", service: "TruthLens", timestamp: new Date().toISOString() });
+});
+
+const feedbackFilePath = path.join(process.cwd(), "data", "feedback.json");
+
+app.post("/api/feedback", async (req, res) => {
+  const name = String(req.body?.name || "").trim().replace(/\s+/g, " ");
+  const email = String(req.body?.email || "").trim().toLowerCase();
+  const message = String(req.body?.message || "").trim();
+
+  if (name.length < 2 || name.length > 80) {
+    return res.status(400).json({ error: "Please enter a name between 2 and 80 characters." });
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) {
+    return res.status(400).json({ error: "Please enter a valid email address." });
+  }
+  if (message.length < 10 || message.length > 3000) {
+    return res.status(400).json({ error: "Feedback must be between 10 and 3,000 characters." });
+  }
+
+  const entry = { id: `feedback-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, name, email, message, submittedAt: new Date().toISOString() };
+  try {
+    await fs.mkdir(path.dirname(feedbackFilePath), { recursive: true });
+    let existing: unknown[] = [];
+    try {
+      const raw = await fs.readFile(feedbackFilePath, "utf8");
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) existing = parsed;
+    } catch (error: any) {
+      if (error?.code !== "ENOENT") throw error;
+    }
+    await fs.writeFile(feedbackFilePath, JSON.stringify([...existing, entry].slice(-1000), null, 2) + "\n", "utf8");
+    return res.status(201).json({ success: true });
+  } catch (error) {
+    console.error("Feedback storage error:", error);
+    return res.status(500).json({ error: "Feedback could not be saved. Please try again." });
+  }
 });
 
 function decodeXmlEntities(value: string): string {
@@ -941,6 +979,41 @@ function cleanCanonicalUrl(rawUrl?: string | null): string | null {
 
 function isValidSpecificUrl(rawUrl?: string | null): boolean {
   return cleanCanonicalUrl(rawUrl) !== null;
+}
+
+/**
+ * Finds an article's publisher-supplied social-preview image. This is used only
+ * for already-validated evidence URLs and never fabricates a comparison image.
+ */
+async function extractReferenceImage(sourceUrl: string): Promise<string | undefined> {
+  const pageUrl = cleanCanonicalUrl(sourceUrl);
+  if (!pageUrl) return undefined;
+
+  try {
+    const response = await fetch(pageUrl, {
+      headers: {
+        "User-Agent": "TruthLens Evidence Preview/1.0",
+        Accept: "text/html,application/xhtml+xml",
+      },
+      redirect: "error",
+      signal: AbortSignal.timeout(4500),
+    });
+    if (!response.ok || !response.headers.get("content-type")?.includes("text/html")) return undefined;
+
+    const html = (await response.text()).slice(0, 350_000);
+    const metaTags = html.match(/<meta\b[^>]*>/gi) || [];
+    for (const tag of metaTags) {
+      const key = (tag.match(/\b(?:property|name)\s*=\s*["']?([^\s"'>]+)/i)?.[1] || "").toLowerCase();
+      if (!["og:image", "og:image:secure_url", "twitter:image", "twitter:image:src"].includes(key)) continue;
+      const rawImageUrl = tag.match(/\bcontent\s*=\s*["']([^"']+)["']/i)?.[1]?.replace(/&amp;/g, "&");
+      if (!rawImageUrl) continue;
+      const imageUrl = new URL(rawImageUrl, pageUrl);
+      if (imageUrl.protocol === "https:" || imageUrl.protocol === "http:") return imageUrl.toString();
+    }
+  } catch {
+    // Evidence pages often block preview fetches; the UI keeps the honest empty state.
+  }
+  return undefined;
 }
 
 interface DiscoveredSource {
@@ -2218,15 +2291,15 @@ OUTPUT JSON FORMAT:
           });
         }
 
-        if (processedSources.length >= 5) break;
+        if (processedSources.length >= 12) break;
       }
     }
 
-    // Ensure 4 to 5 verified resources when multiple candidates are available:
-    // Supplement with highest-relevance discovered sources across diverse categories (Official, News, Blogs/Analysis)
-    if (processedSources.length < 4 && discoveredSources.length > 0) {
+    // Preserve a broader, diverse evidence trail for user audit. The top
+    // sources still inform the verdict; additional candidates add transparency.
+    if (processedSources.length < 12 && discoveredSources.length > 0) {
       for (const ds of discoveredSources) {
-        if (processedSources.length >= 5) break;
+        if (processedSources.length >= 12) break;
         if (usedUrls.has(ds.url)) continue;
         if (!isValidSpecificUrl(ds.url)) continue;
 
@@ -2269,7 +2342,20 @@ OUTPUT JSON FORMAT:
       }
     }
 
-    parsedResult.sources = processedSources.slice(0, 5);
+    parsedResult.sources = processedSources.slice(0, 12);
+
+    // For image checks, retrieve a real publisher-supplied preview from the
+    // verified evidence page. A missing preview remains missing rather than
+    // substituting an unrelated or AI-generated image.
+    if (isImage && parsedResult.sources.length > 0) {
+      const sourcesWithReferenceImages = await Promise.all(
+        parsedResult.sources.map(async (source) => ({
+          ...source,
+          referenceImageUrl: source.url ? await extractReferenceImage(source.url) : undefined,
+        }))
+      );
+      parsedResult.sources = sourcesWithReferenceImages;
+    }
 
     // A definitive verdict must be backed by at least one validated source.
     // Model-only contradiction text is not enough to call a claim false.

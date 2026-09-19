@@ -15,6 +15,8 @@ import { motion, AnimatePresence } from "motion/react";
 
 const HISTORY_STORAGE_KEY = "truthlens-history-v1";
 const RESULT_COMPLETION_DELAY_MS = 700;
+const PROGRESS_STEP_DISPLAY_MS = 550;
+const PROGRESS_STEP_ORDER = ["parse", "search", "analyze", "crossref", "verdict"] as const;
 
 const wait = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
 
@@ -106,6 +108,18 @@ function MainApp() {
       message: "Connecting to the verification engine",
       log: "BOOT :: opening live progress stream...",
     });
+    // A proxy can deliver several SSE events in one network chunk. Present each
+    // newly reached stage in order so React does not batch the user past it.
+    let displayedStepIndex = 0;
+    const presentProgress = async (payload: VerificationProgressEvent) => {
+      const nextStepIndex = Math.max(0, PROGRESS_STEP_ORDER.indexOf(payload.step || "parse"));
+      setLiveProgress(payload);
+
+      if (nextStepIndex > displayedStepIndex) {
+        displayedStepIndex = nextStepIndex;
+        await wait(PROGRESS_STEP_DISPLAY_MS);
+      }
+    };
 
     try {
       const response = await fetch("/api/verify", {
@@ -159,7 +173,7 @@ function MainApp() {
             if (!dataLine) continue;
             const payload = JSON.parse(dataLine.slice(6)) as VerificationProgressEvent;
             if (payload.type === "progress") {
-              setLiveProgress(payload);
+              await presentProgress(payload);
             } else if (payload.type === "result" && payload.result) {
               jsonResult = payload.result;
             } else if (payload.type === "error") {
@@ -173,8 +187,9 @@ function MainApp() {
             .split("\n")
             .find((line) => line.startsWith("data: "));
           if (dataLine) {
-            const payload = JSON.parse(dataLine.slice(6)) as VerificationProgressEvent;
-            if (payload.type === "result" && payload.result) jsonResult = payload.result;
+          const payload = JSON.parse(dataLine.slice(6)) as VerificationProgressEvent;
+          if (payload.type === "progress") await presentProgress(payload);
+          if (payload.type === "result" && payload.result) jsonResult = payload.result;
             if (payload.type === "error") throw new Error(payload.error || "Verification failed.");
           }
         }
