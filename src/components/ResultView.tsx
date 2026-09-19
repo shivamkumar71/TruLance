@@ -12,12 +12,26 @@ const verdictMeta = (verdict:string) => { const v=verdict.toUpperCase(); if(v===
 const relation = (s:VerificationSource) => { const r=(s.relationship||"NEUTRAL").toUpperCase(); if(r==="SUPPORTS")return{label:"Supports",cls:"result-rel-support",icon:CheckCircle2}; if(r==="CONTRADICTS")return{label:"Contradicts",cls:"result-rel-contradict",icon:XCircle}; if(r==="CONTEXT")return{label:"Related",cls:"result-rel-related",icon:Info}; return{label:"Neutral",cls:"result-rel-neutral",icon:Info}; };
 const sourceType = (s:VerificationSource) => { const h=host(s.url||s.canonicalUrl),c=(s.category||"").toLowerCase(); if(c.includes("official")||/\.gov(\.in)?$|\.nic\.in$|\.mil$/.test(h)||/who\.int|un\.org|nasa\.gov/.test(h))return"Government / Official"; if(c.includes("research")||/nature\.com|science\.org|arxiv\.org|nih\.gov|pubmed/.test(h))return"Research"; if(c.includes("fact"))return"Fact Check"; if(c.includes("news"))return"News Article"; if(c.includes("historical"))return"Archive / Context"; return"Web Source"; };
 
-const SourceRow:React.FC<{source:VerificationSource;index:number}>=({source,index})=>{ const url=safeUrl(source.url||source.canonicalUrl),rel=relation(source),RelIcon=rel.icon,publisher=text(source.publisher)||host(url)||"Source"; return <div className="tl-source-row">
+const SourceRow:React.FC<{source:VerificationSource;index:number}>=({source,index})=>{ 
+ const url=safeUrl(source.url||source.canonicalUrl);
+ const rel=relation(source),RelIcon=rel.icon;
+ const publisher=text(source.publisher)||host(url)||"Source";
+ const domain=host(url);
+ const title=text(source.title)||"Verified source record";
+ const initials=publisher.split(/\\s+/).filter(Boolean).slice(0,2).map(x=>x[0]).join("").toUpperCase();
+ return <div className="tl-source-row">
   <div className="tl-source-rank">{index+1}</div>
-  <div className="tl-source-main"><div className="tl-source-title"><strong>{publisher}</strong>{url&&<span>{host(url)}</span>}</div><div className="tl-source-description">{text(source.title)||"Verified source record"}</div><div className="tl-source-url">{url||"No validated URL available"}</div></div>
-  <div className={`tl-rel-pill ${rel.cls}`}><RelIcon className="w-3 h-3"/>{rel.label}</div><div className="tl-source-type">{sourceType(source)}</div><div className="tl-source-date">{text(source.date||source.publishedDate)||"—"}</div>
-  {url?<a className="tl-open-btn" href={url} target="_blank" rel="noopener noreferrer">Open <ExternalLink className="w-3 h-3"/></a>:<span className="tl-open-disabled">Unavailable</span>}
-</div>;};
+  <div className="tl-source-identity">
+   <div className="tl-source-avatar">{initials||"S"}</div>
+   <div className="tl-source-publisher"><strong>{publisher}</strong>{domain&&<span>{domain}</span>}</div>
+  </div>
+  <div className="tl-source-description" title={title}>{title}</div>
+  <div className="tl-source-date">{text(source.date||source.publishedDate)||"—"}</div>
+  <div className={`tl-rel-pill ${rel.cls}`}><RelIcon className="w-3 h-3"/>{rel.label}</div>
+  <div className="tl-source-type">{sourceType(source)}</div>
+  <div className="tl-source-actions">{url?<a className="tl-open-btn" href={url} target="_blank" rel="noopener noreferrer">Open <ExternalLink className="w-3 h-3"/></a>:<span className="tl-open-disabled">Unavailable</span>}</div>
+ </div>;
+};
 
 export const ResultView:React.FC<ResultViewProps>=({result,onReset,inputPreviewUrl})=>{
  const[copied,setCopied]=useState(false); const[auditOpen,setAuditOpen]=useState(false);
