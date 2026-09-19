@@ -28,6 +28,7 @@ function MainApp() {
   const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
   const [legalModal, setLegalModal] = useState<"privacy" | "terms" | null>(null);
   const [liveProgress, setLiveProgress] = useState<VerificationProgressEvent | null>(null);
+  const [resultPreviewUrl, setResultPreviewUrl] = useState<string | null>(null);
 
   // Load history from localStorage
   useEffect(() => {
@@ -199,6 +200,7 @@ function MainApp() {
       await wait(RESULT_COMPLETION_DELAY_MS);
 
       setResult(jsonResult);
+      setResultPreviewUrl(data.file?.previewUrl || null);
       saveToHistory(jsonResult);
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (err: any) {
@@ -215,6 +217,7 @@ function MainApp() {
 
   const handleReset = () => {
     setResult(null);
+    setResultPreviewUrl(null);
     setApiError(null);
     setCurrentTab("check");
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -222,6 +225,7 @@ function MainApp() {
 
   const handleSelectHistoryItem = (item: HistoryItem) => {
     setResult(item.result);
+    setResultPreviewUrl(null);
     setApiError(null);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -295,7 +299,7 @@ function MainApp() {
               transition={{ duration: 0.2 }}
               className="w-full"
             >
-              <ResultView result={result} onReset={handleReset} />
+              <ResultView result={result} onReset={handleReset} inputPreviewUrl={resultPreviewUrl} />
             </motion.div>
           ) : currentTab === "check" ? (
             <motion.div
