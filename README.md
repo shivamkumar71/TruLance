@@ -1,63 +1,209 @@
 # TruthLens
 
-> **Know what is true before you share it.**
+> **EVIDENCE BEFORE BELIEF.**
+>
+> TruthLens is an open-source, evidence-first verification workspace designed to help people investigate claims before they become beliefs, posts, forwarded messages, or decisions.
 
-TruthLens is an evidence-first verification workspace for claims, images, PDFs, and documents. It uses Gemini for multimodal analysis, discovers relevant public sources, compares supporting and contradicting evidence, and presents a calibrated verdict instead of an unexplained yes-or-no answer.
+[![Live Demo](https://img.shields.io/badge/Live-Demo-0b8f67?style=flat-square)](https://truthlenses.netlify.app/)
+[![Open Source](https://img.shields.io/badge/Open%20Source-MIT-111827?style=flat-square)](LICENSE)
+[![React](https://img.shields.io/badge/React-19-61dafb?style=flat-square&logo=react&logoColor=white)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178c6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Gemini](https://img.shields.io/badge/AI-Gemini-4285f4?style=flat-square)](https://ai.google.dev/)
+[![MongoDB](https://img.shields.io/badge/Data-MongoDB-47A248?style=flat-square&logo=mongodb&logoColor=white)](https://www.mongodb.com/)
 
-## Live Demo
+**TruthLens is not a "truth button." It is an evidence layer between information and belief.**
 
-Try the deployed application: [TruthLens on Netlify](https://truthlenses.netlify.app/)
+[Live Demo](https://truthlenses.netlify.app/) · [GitHub](https://github.com/shivamkumar71/TruLance) · [Portfolio](https://shivamkumar71.netlify.app)
 
-## Contents
+---
 
-- [What it does](#what-it-does)
-- [Live demo](#live-demo)
-- [How it works](#how-it-works)
-- [Quick start](#quick-start)
-- [API reference](#api-reference)
-- [Trust and privacy model](#trust-and-privacy-model)
-- [Deployment](#deployment)
-- [Development](#development)
-- [Project map](#project-map)
-- [Known limitations](#known-limitations)
-- [Author](#author)
+## Why TruthLens?
 
-## What it does
+The internet makes information easy to access and difficult to evaluate.
 
-TruthLens is built for the moment before a claim becomes a forwarded message, post, or decision. Users can:
+A search engine can help you find information. A general-purpose AI assistant can help explain it. TruthLens focuses on a different workflow:
 
-- Submit plain-text claims with optional context.
-- Upload images, PDFs, and supported Word documents.
-- See extracted claims, timelines, context, evidence strength, and verification difficulty.
-- Inspect source relationships: `SUPPORTS`, `CONTRADICTS`, `CONTEXT`, or `NEUTRAL`.
-- Review source quality and tiers, including official records, research, news, and fact-checking resources.
-- See AI-origin signals for submitted text, images, and documents where analysis is available.
-- Reopen up to 50 recent checks from local browser history.
+**Claim → Research → Evidence → Compare → Explain**
+
+Instead of returning an unexplained yes/no answer, TruthLens is designed to expose the evidence behind a verification result — including supporting evidence, contradicting evidence, context, source relationships, confidence, and direct source links.
+
+The goal is simple:
+
+> **Make verification inspectable, not just answerable.**
+
+---
+
+## What TruthLens does
+
+TruthLens currently supports:
+
+- **Text verification** — submit a claim directly.
+- **Image & screenshot verification** — analyze submitted visual content.
+- **PDF verification** — extract and investigate document content.
+- **DOCX verification** — process supported Word documents.
+- **Claim extraction & context analysis** — identify the factual assertion being investigated.
+- **Live public-source discovery** — search for relevant evidence.
+- **Evidence comparison** — organize evidence as `SUPPORTS`, `CONTRADICTS`, `CONTEXT`, or `NEUTRAL`.
+- **Source transparency** — show publisher, date, domain, relationship, source type, and an actionable source link.
+- **Verdict + confidence** — return a structured verification result rather than a generic chat response.
+- **Temporal context** — account for dates and time-sensitive claims.
+- **Evidence strength** — surface how strong the available evidence is.
+- **Verification history** — keep recent checks available locally in the browser.
+- **Feedback collection** — store product feedback in MongoDB.
+- **Verification persistence** — store verification records and result metadata in MongoDB.
+- **Light/dark UI** — switch between themes while keeping the verification workspace readable.
 
 ### Verdict vocabulary
 
 | Verdict | Meaning |
 | --- | --- |
-| `TRUE` | Reliable evidence clearly confirms the claim. |
-| `LIKELY TRUE` | Evidence strongly supports the claim, with minor details unresolved. |
-| `MIXED` | The claim combines accurate, inaccurate, or missing context. |
-| `LIKELY FALSE` | Credible evidence weighs strongly against the claim. |
+| `TRUE` | The available evidence clearly supports the claim. |
+| `LIKELY TRUE` | The available evidence strongly supports the claim, while some details may remain unresolved. |
+| `MIXED` | The claim contains a mixture of supported, unsupported, or context-dependent information. |
+| `LIKELY FALSE` | The available evidence strongly conflicts with the claim. |
 | `FALSE` | Reliable evidence directly refutes the claim. |
 | `UNVERIFIED` | Available evidence is insufficient or inconclusive. |
 
-## How it works
+These labels describe the **available evidence**, not an absolute guarantee of reality.
+
+---
+
+## Product workflow
 
 ```mermaid
 flowchart LR
-		A[Text or upload] --> B[Claim extraction]
-		B --> C[Query formulation]
-		C --> D[Public source discovery]
-		D --> E[Evidence comparison]
-		E --> F[Verdict and confidence]
-		F --> G[Sources, context, and history]
+    A["Text / Image / PDF / DOCX"] --> B["Claim & Context"]
+    B --> C["Research Queries"]
+    C --> D["Public Source Discovery"]
+    D --> E["Evidence Comparison"]
+    E --> F["Verdict + Confidence"]
+    F --> G["Evidence Trail + Sources"]
+    G --> H["MongoDB Persistence"]
 ```
 
-The browser handles the workspace and local history. The Express server keeps the Gemini credential private, prepares the verification request, discovers sources, and returns a structured result to the React client.
+### Evidence model
+
+TruthLens does not treat a single webpage as automatically true.
+
+The verification pipeline is designed to:
+
+1. Identify the claim and relevant context.
+2. Form research queries.
+3. Discover relevant public sources.
+4. Compare evidence against the claim.
+5. Separate supporting, contradicting, contextual, and neutral material.
+6. Produce a structured verdict with uncertainty where appropriate.
+7. Preserve source provenance so the user can inspect the evidence directly.
+
+A result can therefore be **MIXED** or **UNVERIFIED** when the available evidence does not justify a definitive conclusion.
+
+---
+
+## Architecture
+
+```text
+┌───────────────────────────────┐
+│        React + Vite UI        │
+│ Verification workspace        │
+│ Result / Evidence / Feedback  │
+└───────────────┬───────────────┘
+                │
+                ▼
+┌───────────────────────────────┐
+│     Express / Netlify API     │
+│  /api/verify  /api/feedback   │
+│  /api/health                  │
+└───────┬───────────────┬───────┘
+        │               │
+        ▼               ▼
+┌───────────────┐   ┌────────────────┐
+│ Google Gemini │   │ MongoDB Atlas  │
+│ AI analysis   │   │ truthlens DB   │
+└───────────────┘   │ feedbacks      │
+                    │ queries        │
+                    └────────────────┘
+```
+
+### Core stack
+
+| Layer | Technology |
+| --- | --- |
+| Frontend | React 19, TypeScript, Vite |
+| UI | Tailwind CSS, Motion, Lucide React |
+| Backend | Node.js, Express |
+| AI | Google Gemini API |
+| Documents | Mammoth |
+| Database | MongoDB Atlas |
+| Deployment | Netlify Functions |
+| Validation | TypeScript |
+| Local persistence | Browser localStorage |
+
+The AI model is an implementation component; the product's focus is the **verification workflow, evidence trail, provenance, and user experience**.
+
+---
+
+## Data model
+
+TruthLens uses the same MongoDB database with separate collections:
+
+```text
+truthlens
+├── feedbacks
+└── queries
+```
+
+### `feedbacks`
+
+Stores submitted product feedback:
+
+```json
+{
+  "name": "Example User",
+  "email": "user@example.com",
+  "message": "The evidence trail was useful.",
+  "createdAt": "2026-09-20T00:00:00.000Z"
+}
+```
+
+### `queries`
+
+Stores verification metadata and the structured verification result:
+
+```json
+{
+  "query": "Claim submitted for verification",
+  "inputType": "text",
+  "claim": "Example claim",
+  "verdict": "UNVERIFIED",
+  "confidence": 62,
+  "evidenceStrength": "Moderate",
+  "sourcesCount": 4,
+  "createdAt": "2026-09-20T00:00:00.000Z"
+}
+```
+
+The actual stored verification record can contain the full structured result returned by the verification pipeline.
+
+---
+
+## Trust, safety & privacy
+
+TruthLens is intentionally designed around **evidence and uncertainty rather than certainty theater**.
+
+- Search failure is not treated as proof that a claim is false.
+- A source is not automatically treated as correct simply because it was discovered online.
+- Supporting and contradicting evidence can be surfaced together.
+- Confidence is not the same thing as a mathematical probability that a claim is true.
+- AI-origin detection is probabilistic and should not be treated as authorship proof.
+- Users should inspect cited sources before making high-impact decisions.
+- Uploaded content is processed for the verification request and is not intentionally persisted by the application as an upload archive.
+- Verification records and feedback are persisted in MongoDB as described above.
+- The Gemini API key and MongoDB credentials must remain server-side.
+- Never commit `.env`, credentials, API keys, or private user data.
+
+**TruthLens does not guarantee truth.** It provides an evidence-based verification workflow intended to help users make better-informed judgments.
+
+---
 
 ## Quick start
 
@@ -65,29 +211,39 @@ The browser handles the workspace and local history. The Express server keeps th
 
 - Node.js 18+
 - npm
-- A Google Gemini API key with access to the configured models
+- Google Gemini API key
+- MongoDB Atlas account/database user if persistence is enabled
 
-### Install and configure
+### Clone & install
 
 ```bash
-git clone <your-repository-url>
+git clone https://github.com/shivamkumar71/TruLance.git
 cd TruLance
 npm install
 ```
 
-Create `.env` at the project root:
+### Environment variables
+
+Create a local `.env` file in the project root:
 
 ```env
-GEMINI_API_KEY=your_gemini_api_key_here
+GEMINI_API_KEY=your_gemini_api_key
+MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/
+MONGODB_DB=truthlens
 ```
 
-Keep the key server-side. Never put it in `src/`, commit it, or expose it through a `VITE_*` variable.
+**Never commit this file.**
 
-### Start development
+For local development, keep MongoDB credentials in `.env`. For Netlify, add the same variables through the site's protected environment-variable settings.
+
+### Run locally
 
 ```bash
 npm run dev
 ```
+
+The local development server is configured to run on port `3000`.
+
 ### Production build
 
 ```bash
@@ -96,93 +252,109 @@ npm run build
 npm start
 ```
 
-The build creates the browser bundle and the bundled server entry at `dist/server.cjs`.
+---
 
-## API reference
+## API
 
 ### `GET /api/health`
 
-Returns a lightweight service check:
-
-```json
-{
-	"status": "ok",
-	"service": "TruthLens",
-	"timestamp": "2026-09-04T12:00:00.000Z"
-}
-```
+Lightweight service check.
 
 ### `POST /api/verify`
 
-Accepts JSON. At least one of `text`, `userContext`, or `fileBase64` is required.
+Accepts at least one of `text`, `userContext`, or `fileBase64`.
+
+Example:
 
 ```json
 {
-	"text": "The claim to verify",
-	"userContext": "Optional country, date, or background context",
-	"fileBase64": "Optional base64-encoded file",
-	"mimeType": "Optional MIME type, for example image/png",
-	"fileName": "Optional original filename"
+  "text": "The claim to verify",
+  "userContext": "India, 2026"
 }
 ```
 
-Example request:
+Supported upload metadata includes `fileBase64`, `mimeType`, and `fileName`.
 
-```bash
-curl -X POST http://localhost:3000/api/verify \
-	-H "Content-Type: application/json" \
-	-d '{"text":"The claim to verify","userContext":"India, 2026"}'
+### `POST /api/feedback`
+
+Accepts:
+
+```json
+{
+  "name": "Example User",
+  "email": "user@example.com",
+  "message": "Your feedback here"
+}
 ```
 
-Successful responses follow the shared `VerificationResult` contract in [src/types.ts](src/types.ts). They include the claim, verdict, confidence score, evidence, sources, analysis metadata, and an ISO timestamp. Invalid requests return HTTP `400` with an `error` message; upstream or server failures return an error response.
+Successful feedback is persisted to the `feedbacks` collection.
 
-## Trust and privacy model
-
-TruthLens is designed around transparency, not certainty theater:
-
-- Search failure is not treated as proof that a claim is false.
-- URLs are kept in the structured sources section rather than mixed into evidence prose.
-- The UI exposes uncertainty, source relationships, confidence, and temporal context.
-- The Gemini API key is loaded only by the server from `GEMINI_API_KEY`.
-- Verification history is stored in the browser's `localStorage`, not in an application database.
-- Uploaded content is processed for the verification request and is not intentionally persisted by this application.
-
-Do not submit confidential, regulated, or personally identifiable material unless you have reviewed the privacy terms of the configured AI provider. Verification results are decision support; review the cited sources before making a high-impact decision.
+---
 
 ## Deployment
 
-TruthLens requires a Node-compatible server runtime. A static-only deployment cannot safely serve `/api/verify` because the Gemini credential must remain private.
+TruthLens is configured for Netlify.
 
-### Netlify
+### Netlify configuration
 
-This repository includes [`netlify.toml`](netlify.toml) and [`netlify/functions/api.ts`](netlify/functions/api.ts) for Netlify Functions.
+The repository includes:
 
-1. Push the repository to GitHub.
-2. In Netlify, choose **Add new site > Import an existing project** and select `shivamkumar71/TruLance`.
-3. Keep the build command as `npm run build` and publish directory as `dist`.
-4. Set the Functions directory to `netlify/functions` if Netlify does not detect it automatically.
-5. Add `GEMINI_API_KEY` under **Site configuration > Environment variables**. Paste the value directly into Netlify; do not commit `.env`.
-6. Deploy the site.
-7. Confirm `https://<your-site>.netlify.app/api/health` returns a JSON response with `"status": "ok"`.
+- `netlify.toml`
+- `netlify/functions/api.ts`
+- Express API integration
+- Vite production build
+- server-side environment variables
 
-Netlify serves the frontend from `dist/` and routes `/api/*` to the Express-backed serverless function. The Netlify adapter keeps the Gemini credential on the server side.
+Recommended production environment variables:
 
-Configure these production settings:
-
-| Setting | Requirement |
+| Variable | Purpose |
 | --- | --- |
-| Runtime | Node.js 18 or newer |
-| Build command | `npm run build` |
-| Start command | Not required; Netlify manages the frontend and function runtime |
-| Secret | `GEMINI_API_KEY` in the host's protected environment settings |
-| Health check | `GET /api/health` |
-| Request sizing | Allow requests up to 40 MB if supporting the current upload limit |
+| `GEMINI_API_KEY` | Gemini API authentication |
+| `MONGODB_URI` | MongoDB Atlas connection string |
+| `MONGODB_DB` | MongoDB database name, normally `truthlens` |
 
-Before release, verify the health endpoint, a text check, an image/document check, API quota behavior, and error handling. Do not deploy `.env`, `node_modules/`, or local `dist/` output from source control.
+Never place secrets in frontend code or `VITE_*` variables.
 
-## Project Review
+### Deployment checklist
 
-The current production deployment is available for review at [truthlenses.netlify.app](https://truthlenses.netlify.app/). You can test text verification, supported uploads, verdict explanations, evidence sources, local history, and theme switching directly in the live application.
+Before deploying:
+
+- [ ] Environment variables are configured in Netlify.
+- [ ] MongoDB Atlas network access allows the deployment runtime.
+- [ ] `npm run lint` passes.
+- [ ] `npm run build` passes.
+- [ ] `/api/health` responds successfully.
+- [ ] Text verification works.
+- [ ] Image/PDF/DOCX verification works.
+- [ ] Feedback is persisted to MongoDB.
+- [ ] Verification records are persisted to MongoDB.
+- [ ] No secrets are committed to Git.
+
+---
+
+## Project structure
+
+```text
+.
+├── assets/                     # Static assets
+├── netlify/
+│   └── functions/api.ts        # Netlify serverless entry
+├── src/
+│   ├── components/             # UI and verification views
+│   ├── context/                # Shared React context
+│   ├── App.tsx                 # App state and navigation
+│   ├── main.tsx                # React entry point
+│   ├── types.ts                # Verification contracts
+│   └── index.css               # Global/theme styles
+├── server.ts                   # Express API + verification orchestration
+├── local-server.ts             # Local development host
+├── netlify.toml                # Netlify configuration
+├── package.json                # Dependencies and scripts
+├── tsconfig.json               # TypeScript configuration
+└── vite.config.ts              # Vite configuration
+```
+
+---
 
 ## Development
 
@@ -190,53 +362,20 @@ Available scripts:
 
 | Command | Purpose |
 | --- | --- |
-| `npm run dev` | Start the Express and Vite development server |
-| `npm run lint` | Run TypeScript validation with `tsc --noEmit` |
-| `npm run build` | Build the frontend and bundle the production server |
-| `npm start` | Run the compiled production server |
-| `npm run preview` | Preview the Vite frontend build |
+| `npm run dev` | Start local development server |
+| `npm run lint` | TypeScript type-check |
+| `npm run build` | Build frontend and production server |
+| `npm start` | Run compiled production server |
+| `npm run preview` | Preview the Vite build |
 
-Recommended change loop:
+### Contribution workflow
 
-1. Keep feature work focused and preserve the typed contracts in `src/types.ts`.
-2. Run `npm run lint` after TypeScript changes.
-3. Run `npm run build` before opening a pull request.
-4. Keep credentials, user uploads, and machine-specific settings out of commits.
+TruthLens is currently **open source** and welcomes focused contributions.
 
-## Project map
-
-```text
-.
-├── assets/                 # Static assets
-├── netlify/
-│   └── functions/api.ts    # Netlify serverless function entry point
-├── src/
-│   ├── components/         # Views and reusable UI components
-│   ├── context/            # Shared React context providers
-│   ├── App.tsx             # Navigation, verification state, and local history
-│   ├── main.tsx            # React entry point
-│   ├── types.ts            # Verification request and result contracts
-│   └── index.css           # Global styles and theme rules
-├── server.ts               # Express API and Gemini orchestration (safe for serverless imports)
-├── local-server.ts         # Standalone startup, Vite development host, and static serving
-├── index.html              # Browser document entry point
-├── package.json            # Scripts and dependencies
-├── netlify.toml             # Netlify build, function, and redirect configuration
-├── tsconfig.json           # TypeScript configuration
-└── vite.config.ts          # Vite configuration
-```
-
-## Known limitations
-
-- Results depend on the quality, freshness, and availability of discovered public sources.
-- AI-origin detection is probabilistic and should not be treated as authorship proof.
-- Browser history is device- and browser-local; clearing site data removes it.
-- The current server uses a fixed `40 MB` JSON and URL-encoded body limit.
-- There is no built-in user authentication, database persistence, rate limiting, or automated end-to-end test suite yet.
-
-## Contributing
-
-Issues and focused pull requests are welcome. Please include the user-visible behavior being changed, the verification strategy, and any deployment or privacy impact. Before submitting:
+1. Fork the repository.
+2. Create a feature branch.
+3. Make a focused change.
+4. Run:
 
 ```bash
 npm install
@@ -244,13 +383,100 @@ npm run lint
 npm run build
 ```
 
+5. Open a pull request with:
+   - what changed,
+   - why it changed,
+   - how it was tested,
+   - any privacy/security/deployment impact.
+
+For verification-related changes, explain how the change affects evidence quality, source handling, uncertainty, or user trust.
+
+---
+
+## Current limitations
+
+TruthLens is an evolving open-source project. Important limitations include:
+
+- Verification quality depends on the availability, freshness, relevance, and quality of discovered sources.
+- Source quantity does not automatically mean source independence.
+- AI reasoning can make mistakes and should be reviewed against the cited evidence.
+- AI-origin detection is probabilistic.
+- Browser history is local to the user's browser/device.
+- The application currently has no built-in user authentication.
+- There is no comprehensive automated end-to-end test suite yet.
+- Rate limiting and abuse prevention require further hardening.
+- MongoDB persistence is currently focused on verification records and feedback rather than a complete user-account system.
+
+These limitations are part of the project's development roadmap, not hidden assumptions.
+
+---
+
+## Roadmap
+
+### Current
+- [x] Text verification
+- [x] Image/screenshot verification
+- [x] PDF/DOCX verification
+- [x] Public-source discovery
+- [x] Evidence relationships
+- [x] Structured verdicts and confidence
+- [x] Source transparency
+- [x] Verification history
+- [x] MongoDB feedback persistence
+- [x] MongoDB verification persistence
+- [x] Netlify deployment
+
+### Next
+- [ ] URL verification
+- [ ] Video verification
+- [ ] Voice input
+- [ ] Richer provenance and source-independence analysis
+- [ ] Multilingual verification
+- [ ] Stronger evaluation benchmarks
+- [ ] Verification API for developers
+- [ ] More comprehensive automated testing
+- [ ] Rate limiting and abuse protection
+
+### Long-term direction
+
+TruthLens is exploring a broader idea:
+
+> **Evidence & Verification Infrastructure**
+
+The long-term goal is not simply to answer whether a claim is true. It is to make the **evidence behind information traceable, inspectable, and reusable** across products and workflows.
+
+---
+
+## Open-source principles
+
+TruthLens is being kept open source because verification systems benefit from scrutiny.
+
+We want contributors to be able to inspect:
+
+- how verification requests are processed,
+- how evidence is represented,
+- how sources are surfaced,
+- where uncertainty is exposed,
+- how data is persisted,
+- and where the system still has limitations.
+
+If you find a reliability, privacy, security, or evidence-quality issue, please open an issue with enough detail to reproduce or investigate it. For security-sensitive disclosures, avoid posting credentials or private user data publicly.
+
+---
+
 ## Author
 
-**Shivam Kumar**
+### Shivam Kumar
 
-- Email: [deepkumar14379@gmail.com](mailto:deepkumar14379@gmail.com)
-- Portfolio: [shivamkumar71.netlify.app](https://shivamkumar71.netlify.app)
+Founder / Builder of TruthLens
+
+- Portfolio: https://shivamkumar71.netlify.app
+- GitHub: https://github.com/shivamkumar71
+
+TruthLens is an evolving project. The product, architecture, verification methodology, and roadmap will continue to change as the system is tested against real-world claims and feedback from users and contributors.
+
+---
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE). You are free to use, modify, and distribute the software under its terms.
+TruthLens is released under the **MIT License**. See [LICENSE](LICENSE) for details.
