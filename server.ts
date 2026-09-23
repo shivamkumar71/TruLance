@@ -1656,9 +1656,23 @@ async function discoverRealWebSources(
     if (discovered.length >= 14) break;
   }
 
-  // Filter low relevance candidates (< 25 score) unless list is small
-  const filteredByRelevance = discovered.filter((s) => (s.relevanceScore ?? 50) >= 25);
-  const candidatesToValidate = filteredByRelevance.length > 0 ? filteredByRelevance : discovered;
+  // STRICT EVIDENCE GATE:
+  // A fact-check source must be about the submitted claim, not merely the same topic.
+  // Never fall back to the full search result set when no relevant evidence exists.
+  const strictEvidenceThreshold = 55;
+  const filteredByRelevance = discovered.filter((s) => {
+    const score = s.relevanceScore ?? 0;
+    const searchable = `${s.title} ${s.publisher} ${s.snippet || ""}`.toLowerCase();
+    const matchedEntities = claimInfo.entities.filter((e) => searchable.includes(e.toLowerCase())).length;
+    const matchedKeywords = claimInfo.keywords.filter((k) => searchable.includes(k.toLowerCase())).length;
+    const hasTextualAnchor =
+      matchedEntities > 0 ||
+      matchedKeywords >= Math.min(2, Math.max(1, claimInfo.keywords.length));
+    return score >= strictEvidenceThreshold && hasTextualAnchor;
+  });
+  // IMPORTANT: zero relevant sources means zero sources. Do not rescue unrelated
+  // sources simply because they are authoritative, popular, or from another source family.
+  const candidatesToValidate = filteredByRelevance;
 
   // Live validate candidate URLs in parallel (404 shield)
   const validationPromises = candidatesToValidate.map(async (source) => {
@@ -2089,10 +2103,12 @@ OUTPUT JSON FORMAT:
 2. The "url" field MUST be the EXACT URL provided in the candidate list.
 3. NEVER generate, guess, reconstruct, modify, shorten, or invent any URL.
 4. If a candidate source is irrelevant or merely a generic index/homepage, REJECT IT.
-5. Select 4 to 5 directly relevant sources whenever 4 or more relevant candidates exist.
-6. Prefer one source from each available family in this order: official, wikipedia, news, fact-check, research.
-7. Do not fill the list with multiple URLs from the same publisher or syndicated story when another relevant family is available.
-8. If NO candidate sources are directly relevant, return "sources": [] and verdict "UNVERIFIED".\n`;
+5. Only cite a candidate when its title/snippet clearly concerns the exact claim, event, image, person, place, date, or media context being checked.
+6. Relevance beats authority: an authoritative source about a different event is NOT evidence for this claim.
+7. If fewer than 4 relevant candidates exist, return only the relevant candidates. Never pad the source list.
+8. Do not use multiple URLs from the same publisher or syndicated story as fake independent corroboration.
+9. If NO candidate sources are directly relevant, return "sources": [] and verdict "UNVERIFIED" (or an uncertainty result), and explain that relevant evidence was not found.
+10. For an image with no matching online occurrence or claim-specific evidence, do NOT substitute generic articles about the image's topic.\n`;
     } else {
       sourcesPromptBlock = `No live search sources were pre-discovered for this query. If you cite sources, set "url": null unless citing an exact official standard. NEVER guess or fabricate URLs.\n`;
     }
@@ -2211,16 +2227,9 @@ OUTPUT JSON FORMAT:
           if (matchedByTitle) {
             exactUrl = matchedByTitle.url;
           } else {
-            if (isValidSpecificUrl(s.url)) {
-              const liveness = await validateUrlLiveness(s.url);
-              if (liveness.valid) {
-                exactUrl = s.url;
-              } else {
-                exactUrl = null;
-              }
-            } else {
-              exactUrl = null;
-            }
+            // Never accept a model-generated URL that was not part of the
+            // verified retrieval set. A plausible URL is not evidence.
+            exactUrl = null;
           }
         } else {
           const matched = discoveredSources.find(
@@ -2285,10 +2294,11 @@ OUTPUT JSON FORMAT:
       }
     }
 
-    // Preserve a broader, diverse evidence trail for user audit. The top
-    // sources still inform the verdict; additional candidates add transparency.
+    // Preserve additional evidence only from the STRICTLY RELEVANT retrieval set.
+    // Do not append merely topical or authoritative sources when they are unrelated.
     if (processedSources.length < 12 && discoveredSources.length > 0) {
       for (const ds of discoveredSources) {
+        if ((ds.relevanceScore || 0) < 55) continue;
         if (processedSources.length >= 12) break;
         if (usedUrls.has(ds.url)) continue;
         if (!isValidSpecificUrl(ds.url)) continue;
