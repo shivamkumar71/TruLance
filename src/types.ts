@@ -233,6 +233,7 @@ export interface TrendingNewsItem {
   sourceName: string;
   sourceUrl?: string;
   publishedTime: string;
+  claimType?: string;
 }
 
 export interface VerificationProgressEvent {
