@@ -247,11 +247,14 @@ function shuffleNews<T>(list: T[]): T[] {
   return copy;
 }
 
-// Trending & Circulating News Claims Endpoint
-// Returns fresh real-world news and circulating claims with category labels & source links
+// Trending & Circulating Claims Endpoint
+// TruthLens surfaces things people are likely to encounter and question:
+// viral videos/posts, reused media, AI-generated content, misleading captions,
+// rumors, and claims already being investigated by fact-checkers.
 app.get("/api/trending-news", async (_req, res) => {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
-  interface NewsItem {
+
+  interface ClaimItem {
     id: string;
     title: string;
     category: string;
@@ -261,139 +264,69 @@ app.get("/api/trending-news", async (_req, res) => {
     sourceName: string;
     sourceUrl?: string;
     publishedTime: string;
+    claimType: string;
   }
 
-  const defaultPool: NewsItem[] = [
-    {
-      id: "news-1",
-      title: "NASA James Webb Space Telescope confirms discovery of carbon dioxide atmosphere on exoplanet WASP-39 b",
-      category: "Science & Space",
-      badgeBg: "bg-cyan-500/10 dark:bg-cyan-500/20 border-cyan-500/30",
-      badgeText: "text-cyan-600 dark:text-cyan-400",
-      icon: "🔭",
-      sourceName: "NASA Science",
-      sourceUrl: "https://science.nasa.gov",
-      publishedTime: "Recent",
-    },
-    {
-      id: "news-2",
-      title: "India reports Q1 FY2026-27 GDP growth rate of 7.8% led by manufacturing and services",
-      category: "Politics",
-      badgeBg: "bg-blue-500/10 dark:bg-blue-500/20 border-blue-500/30",
-      badgeText: "text-blue-600 dark:text-blue-400",
-      icon: "📊",
-      sourceName: "Ministry of Statistics (MoSPI)",
-      sourceUrl: "https://mospi.gov.in",
-      publishedTime: "Official Record",
-    },
-    {
-      id: "news-3",
-      title: "WHO clarifies viral claim: consuming boiled garlic water does not cure viral pneumonia or COVID variants",
-      category: "Health & Climate",
-      badgeBg: "bg-rose-500/10 dark:bg-rose-500/20 border-rose-500/30",
-      badgeText: "text-rose-600 dark:text-rose-400",
-      icon: "⚕️",
-      sourceName: "WHO Fact Sheet",
-      sourceUrl: "https://who.int",
-      publishedTime: "Fact Check",
-    },
-    {
-      id: "news-4",
-      title: "OpenAI and Google DeepMind release new reasoning benchmark standards for frontier generative models",
-      category: "Tech & AI",
-      badgeBg: "bg-purple-500/10 dark:bg-purple-500/20 border-purple-500/30",
-      badgeText: "text-purple-600 dark:text-purple-400",
-      icon: "⚡",
-      sourceName: "Reuters Tech",
-      sourceUrl: "https://reuters.com",
-      publishedTime: "Today",
-    },
-    {
-      id: "news-5",
-      title: "UN Climate Summit announces international accord on deep-sea mineral exploration moratorium",
-      category: "Health & Climate",
-      badgeBg: "bg-emerald-500/10 dark:bg-emerald-500/20 border-emerald-500/30",
-      badgeText: "text-emerald-600 dark:text-emerald-400",
-      icon: "🌊",
-      sourceName: "UN Climate Press",
-      sourceUrl: "https://un.org",
-      publishedTime: "Today",
-    },
-    {
-      id: "news-6",
-      title: "EU passes comprehensive Digital Services enforcement rules targeting deceptive deepfake videos",
-      category: "World",
-      badgeBg: "bg-indigo-500/10 dark:bg-indigo-500/20 border-indigo-500/30",
-      badgeText: "text-indigo-600 dark:text-indigo-400",
-      icon: "🌐",
-      sourceName: "BBC World",
-      sourceUrl: "https://bbc.com",
-      publishedTime: "Breaking",
-    },
-    {
-      id: "news-7",
-      title: "Viral video claiming 5G towers cause birds to fall in central Europe debunked by ornithologists",
-      category: "Tech & AI",
-      badgeBg: "bg-amber-500/10 dark:bg-amber-500/20 border-amber-500/30",
-      badgeText: "text-amber-600 dark:text-amber-400",
-      icon: "📡",
-      sourceName: "FactCheck.org",
-      sourceUrl: "https://factcheck.org",
-      publishedTime: "Fact Check",
-    },
-    {
-      id: "news-8",
-      title: "ISRO prepares next-generation reusable launch vehicle test flight from Sriharikota",
-      category: "Science & Space",
-      badgeBg: "bg-cyan-500/10 dark:bg-cyan-500/20 border-cyan-500/30",
-      badgeText: "text-cyan-600 dark:text-cyan-400",
-      icon: "🚀",
-      sourceName: "ISRO Official",
-      sourceUrl: "https://isro.gov.in",
-      publishedTime: "Recent",
-    }
+  const feeds = [
+    { query: '"viral video" when:1d', label: "Viral Video", icon: "🎥", bg: "bg-fuchsia-500/10 dark:bg-fuchsia-500/20 border-fuchsia-500/30", text: "text-fuchsia-600 dark:text-fuchsia-400" },
+    { query: '"viral post" OR "viral claim" when:1d', label: "Viral Post", icon: "📱", bg: "bg-blue-500/10 dark:bg-blue-500/20 border-blue-500/30", text: "text-blue-600 dark:text-blue-400" },
+    { query: '"AI-generated" image OR video when:3d', label: "AI-Generated", icon: "🤖", bg: "bg-violet-500/10 dark:bg-violet-500/20 border-violet-500/30", text: "text-violet-600 dark:text-violet-400" },
+    { query: '"old video" viral when:7d', label: "Old / Reused Media", icon: "🕰️", bg: "bg-amber-500/10 dark:bg-amber-500/20 border-amber-500/30", text: "text-amber-600 dark:text-amber-400" },
+    { query: '"misleading" viral claim when:1d', label: "Misleading Claim", icon: "⚠️", bg: "bg-orange-500/10 dark:bg-orange-500/20 border-orange-500/30", text: "text-orange-600 dark:text-orange-400" },
+    { query: '"fact check" viral claim when:1d', label: "Fact Check", icon: "🔎", bg: "bg-teal-500/10 dark:bg-teal-500/20 border-teal-500/30", text: "text-teal-600 dark:text-teal-400" },
   ];
 
   try {
-    const feedResults = await Promise.allSettled([
-      fetchRssNews("https://news.google.com/rss?hl=en-IN&gl=IN&ceid=IN:en"),
-      fetchRssNews("https://feeds.bbci.co.uk/news/world/rss.xml"),
-      fetchRssNews("https://news.google.com/rss/search?q=when:1d&hl=en&gl=US&ceid=US:en"),
-    ]);
+    const feedResults = await Promise.allSettled(
+      feeds.map((feed) =>
+        fetchRssNews(
+          `https://news.google.com/rss/search?q=${encodeURIComponent(feed.query)}&hl=en-IN&gl=IN&ceid=IN:en`
+        )
+      )
+    );
 
-    const liveItems: NewsItem[] = [];
+    const liveItems: ClaimItem[] = [];
     const seenTitles = new Set<string>();
 
-    for (const result of feedResults) {
-      if (result.status !== "fulfilled") continue;
-      for (const item of result.value) {
-        const key = item.title.toLowerCase().slice(0, 80);
-        if (seenTitles.has(key)) continue;
-        seenTitles.add(key);
-        const meta = inferNewsCategory(item.title);
+    feedResults.forEach((result, feedIndex) => {
+      if (result.status !== "fulfilled") return;
+      const feed = feeds[feedIndex];
+
+      for (const item of result.value.slice(0, 8)) {
+        const normalized = item.title.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+        if (!normalized || seenTitles.has(normalized)) continue;
+        seenTitles.add(normalized);
+
         liveItems.push({
-          id: `live-${liveItems.length}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-          title: item.title.length > 120 ? `${item.title.slice(0, 117)}…` : item.title,
-          category: meta.category,
-          badgeBg: meta.badgeBg,
-          badgeText: meta.badgeText,
-          icon: meta.icon,
+          id: `claim-${liveItems.length}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          title: item.title.length > 130 ? `${item.title.slice(0, 127)}…` : item.title,
+          category: feed.label,
+          badgeBg: feed.bg,
+          badgeText: feed.text,
+          icon: feed.icon,
           sourceName: item.sourceName,
           sourceUrl: item.link || undefined,
           publishedTime: item.publishedTime,
+          claimType: feed.label,
         });
       }
-    }
+    });
 
     if (liveItems.length >= 4) {
       return res.json({ news: shuffleNews(liveItems).slice(0, 6), source: "live" });
     }
   } catch {
-    // Use rotating fallback pool
+    // Use the clearly-labelled demo fallback below.
   }
 
-  const shuffled = shuffleNews(defaultPool).slice(0, 4);
-  res.json({ news: shuffled, source: "curated" });
+  const fallback: ClaimItem[] = [
+    { id: "claim-fallback-1", title: "Viral video claims a current event happened today — verify the footage date and original context", category: "Viral Video", badgeBg: "bg-fuchsia-500/10 dark:bg-fuchsia-500/20 border-fuchsia-500/30", badgeText: "text-fuchsia-600 dark:text-fuchsia-400", icon: "🎥", sourceName: "TruthLens Demo", publishedTime: "Demo", claimType: "Viral Video" },
+    { id: "claim-fallback-2", title: "Circulating image is being shared as recent — check whether the photograph is old or reused", category: "Old / Reused Media", badgeBg: "bg-amber-500/10 dark:bg-amber-500/20 border-amber-500/30", badgeText: "text-amber-600 dark:text-amber-400", icon: "🕰️", sourceName: "TruthLens Demo", publishedTime: "Demo", claimType: "Old / Reused Media" },
+    { id: "claim-fallback-3", title: "AI-generated image is circulating as a real photograph — inspect the claim and provenance", category: "AI-Generated", badgeBg: "bg-violet-500/10 dark:bg-violet-500/20 border-violet-500/30", badgeText: "text-violet-600 dark:text-violet-400", icon: "🤖", sourceName: "TruthLens Demo", publishedTime: "Demo", claimType: "AI-Generated" },
+    { id: "claim-fallback-4", title: "A widely shared social post makes a factual claim — compare it with independent evidence", category: "Viral Post", badgeBg: "bg-blue-500/10 dark:bg-blue-500/20 border-blue-500/30", badgeText: "text-blue-600 dark:text-blue-400", icon: "📱", sourceName: "TruthLens Demo", publishedTime: "Demo", claimType: "Viral Post" },
+  ];
+
+  res.json({ news: fallback, source: "curated" });
 });
 
 function normalizeVerdict(val?: string): VerdictType {
