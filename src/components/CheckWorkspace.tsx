@@ -411,7 +411,7 @@ export const CheckWorkspace: React.FC<CheckWorkspaceProps> = ({
                 <div className="flex items-center justify-between mb-2.5">
                   <span className="text-xs font-bold text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
                     <Newspaper className="w-3.5 h-3.5 text-teal-600 dark:text-teal-300" />
-                    <span>Spreading now</span>
+                    <span>Viral Claims Radar</span>
                     {newsSource === "live" && (
                       <span className="px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wide bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20">
                         Live
@@ -424,10 +424,10 @@ export const CheckWorkspace: React.FC<CheckWorkspaceProps> = ({
                     disabled={newsLoading}
                     id="btn-refresh-trending-news"
                     className="text-[11px] text-slate-500 dark:text-slate-400 inline-flex items-center gap-1 px-2 py-1 -mr-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-teal-700 dark:hover:text-teal-300 transition-colors cursor-pointer disabled:cursor-wait disabled:opacity-60"
-                    title="Refresh latest news"
+                    title="Refresh circulating claims"
                   >
                     <RefreshCw className={`w-3 h-3 ${newsLoading ? "animate-spin" : ""}`} />
-                    <span>{newsLoading ? "Refreshing..." : "Refresh"}</span>
+                    <span>{newsLoading ? "Scanning..." : "Refresh"}</span>
                   </button>
                 </div>
 
