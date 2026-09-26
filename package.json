@@ -6,7 +6,6 @@
   "scripts": {
     "dev": "tsx local-server.ts",
     "build": "vite build",
-    "start": "node dist/server.cjs",
     "preview": "vite preview",
     "lint": "tsc --noEmit"
   },
