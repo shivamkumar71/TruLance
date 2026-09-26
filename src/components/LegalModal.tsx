@@ -38,7 +38,7 @@ export const LegalModal: React.FC<LegalModalProps> = ({ type, onClose }) => {
                 1. <strong>Data Collection:</strong> TruthLens processes user-submitted text and files solely for the purpose of analyzing factual assertions against external public evidence.
               </p>
               <p>
-                2. <strong>Local Storage:</strong> Your verification history is stored locally in your browser's localStorage and is never sold or distributed.
+                2. <strong>Local Storage:</strong> Your verification history shown in the UI is kept for the current browser session. Verification records are persisted server-side in MongoDB.
               </p>
               <p>
                 3. <strong>Source Discovery:</strong> Evidence queries evaluate public search and reference registries to return verified article links and credible source ratings.
