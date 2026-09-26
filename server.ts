@@ -125,8 +125,6 @@ app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", service: "TruthLens", timestamp: new Date().toISOString() });
 });
 
-const feedbackFilePath = path.join(process.cwd(), "data", "feedback.json");
-
 app.post("/api/feedback", async (req, res) => {
   const name = String(req.body?.name || "").trim().replace(/\s+/g, " ");
   const email = String(req.body?.email || "").trim().toLowerCase();
@@ -142,23 +140,20 @@ app.post("/api/feedback", async (req, res) => {
     return res.status(400).json({ error: "Feedback must be between 10 and 3,000 characters." });
   }
 
-  const entry = { id: `feedback-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, name, email, message, submittedAt: new Date().toISOString() };
   try {
-    await fs.mkdir(path.dirname(feedbackFilePath), { recursive: true });
-    let existing: unknown[] = [];
-    try {
-      const raw = await fs.readFile(feedbackFilePath, "utf8");
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) existing = parsed;
-    } catch (error: any) {
-      if (error?.code !== "ENOENT") throw error;
-    }
-    await fs.writeFile(feedbackFilePath, JSON.stringify([...existing, entry].slice(-1000), null, 2) + "\n", "utf8");
+    const db = await getMongoDb();
+    await db.collection("feedbacks").insertOne({
+      id: `feedback-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      name,
+      email,
+      message,
+      submittedAt: new Date(),
+    });
     return res.status(201).json({ success: true });
   } catch (error) {
-    console.error("Feedback storage error:", error);
+    console.error("Feedback MongoDB storage error:", error);
     return res.status(503).json({
-      error: "Feedback could not be submitted right now. Please check the MongoDB Atlas connection, database user credentials, and Network Access settings.",
+      error: "Feedback could not be submitted right now. Please try again later.",
     });
   }
 });
