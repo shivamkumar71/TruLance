@@ -4,7 +4,6 @@
 >
 > TruthLens is an open-source, evidence-first verification workspace designed to help people investigate claims before they become beliefs, posts, forwarded messages, or decisions.
 
-[![Live Demo](https://img.shields.io/badge/Live-Demo-0b8f67?style=flat-square)](https://truthlenses.netlify.app/)
 [![Open Source](https://img.shields.io/badge/Open%20Source-MIT-111827?style=flat-square)](LICENSE)
 [![React](https://img.shields.io/badge/React-19-61dafb?style=flat-square&logo=react&logoColor=white)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178c6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
@@ -13,7 +12,7 @@
 
 **TruthLens is not a "truth button." It is an evidence layer between information and belief.**
 
-[Live Demo](https://truthlenses.netlify.app/) · [GitHub](https://github.com/shivamkumar71/TruLance) · [Portfolio](https://shivamkumar71.netlify.app)
+[GitHub](https://github.com/shivamkumar71/TruLance) · [Portfolio](https://shivamkumar71.netlify.app)
 
 ---
 
