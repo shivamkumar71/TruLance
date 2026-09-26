@@ -21,7 +21,7 @@ import {
 
 dotenv.config();
 
-// MongoDB is server-side only. Keep MONGODB_URI and MONGODB_DB in local .env / Netlify env vars.
+// MongoDB is server-side only. Keep MONGODB_URI and MONGODB_DB in local .env / Vercel environment variables.
 let mongoClient: MongoClient | null = null;
 let mongoDbPromise: Promise<Db> | null = null;
 
