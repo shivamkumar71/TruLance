@@ -292,19 +292,19 @@ Successful feedback is persisted to the `feedbacks` collection.
 
 ## Deployment
 
-TruthLens is configured for Vercel.
+TruthLens is configured for deployment on Netlify.
 
-### Vercel configuration
+### Netlify configuration
 
 The repository includes:
 
-- `vercel.json`
-- `api/[...path].ts`
-- Express API integration
+- `netlify.toml` (Build command, publish folder, Netlify functions directory, and `/api/*` rewrite proxy)
+- `netlify/functions/api.ts` (Serverless HTTP adapter for the Express backend)
+- Express API integration with automated path normalization
 - Vite production build
-- server-side environment variables
+- Server-side environment variables
 
-Recommended production environment variables:
+Recommended production environment variables (Set in Netlify Dashboard: **Site configuration > Environment variables**):
 
 | Variable | Purpose |
 | --- | --- |
@@ -318,8 +318,8 @@ Never place secrets in frontend code or `VITE_*` variables.
 
 Before deploying:
 
-- [ ] Environment variables are configured in Vercel.
-- [ ] MongoDB Atlas network access allows the deployment runtime.
+- [ ] Environment variables (`GEMINI_API_KEY`, `MONGODB_URI`, `MONGODB_DB`) are configured in Netlify.
+- [ ] MongoDB Atlas network access allows the deployment runtime (`0.0.0.0/0` or Netlify IP ranges).
 - [ ] `npm run lint` passes.
 - [ ] `npm run build` passes.
 - [ ] `/api/health` responds successfully.
@@ -336,8 +336,9 @@ Before deploying:
 ```text
 .
 ├── assets/                     # Static assets
-├── api/
-│   └── [...path].ts             # Vercel catch-all API entry
+├── netlify/
+│   └── functions/
+│       └── api.ts              # Netlify serverless Express handler
 ├── src/
 │   ├── components/             # UI and verification views
 │   ├── context/                # Shared React context
@@ -347,7 +348,7 @@ Before deploying:
 │   └── index.css               # Global/theme styles
 ├── server.ts                   # Express API + verification orchestration
 ├── local-server.ts             # Local development host
-├── vercel.json                 # Vercel configuration
+├── netlify.toml                # Netlify build & functions configuration
 ├── package.json                # Dependencies and scripts
 ├── tsconfig.json               # TypeScript configuration
 └── vite.config.ts              # Vite configuration

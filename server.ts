@@ -83,6 +83,19 @@ async function saveVerificationQuery(result: VerificationResult, input: {
 
 export const app = express();
 
+// Normalize incoming path for serverless platforms (Netlify Functions, Vercel, local dev)
+app.use((req, _res, next) => {
+  if (req.url.startsWith("/.netlify/functions/api")) {
+    const stripped = req.url.replace(/^\/\.netlify\/functions\/api/, "");
+    if (!stripped.startsWith("/api")) {
+      req.url = `/api${stripped.startsWith("/") ? "" : "/"}${stripped}`;
+    } else {
+      req.url = stripped;
+    }
+  }
+  next();
+});
+
 // Body parser limits for large documents, PDFs, screenshots, and images
 app.use(express.json({ limit: "40mb" }));
 app.use(express.urlencoded({ extended: true, limit: "40mb" }));
