@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { Navbar } from "./components/Navbar";
 import { HomeView } from "./components/HomeView";
 import { CheckWorkspace } from "./components/CheckWorkspace";
@@ -13,7 +13,6 @@ import { ThemeProvider } from "./context/ThemeContext";
 import { VerificationResult, VerifyRequestPayload, HistoryItem, VerificationProgressEvent } from "./types";
 import { motion, AnimatePresence } from "motion/react";
 
-const HISTORY_STORAGE_KEY = "truthlens-history-v1";
 const RESULT_COMPLETION_DELAY_MS = 700;
 const PROGRESS_STEP_DISPLAY_MS = 550;
 const PROGRESS_STEP_ORDER = ["parse", "search", "analyze", "crossref", "verdict"] as const;
@@ -32,19 +31,8 @@ function MainApp() {
   const [liveProgress, setLiveProgress] = useState<VerificationProgressEvent | null>(null);
   const [resultPreviewUrl, setResultPreviewUrl] = useState<string | null>(null);
 
-  // Load history from localStorage
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(HISTORY_STORAGE_KEY);
-      if (saved) {
-        setHistoryItems(JSON.parse(saved));
-      }
-    } catch (e) {
-      console.warn("Failed to load history from localStorage:", e);
-    }
-  }, []);
-
-  // Save history to localStorage
+  // Verification history is kept only for the current browser session.
+  // Persistent verification data is stored server-side in MongoDB.
   const saveToHistory = (newResult: VerificationResult) => {
     const item: HistoryItem = {
       id: "hist-" + Date.now() + "-" + Math.random().toString(36).slice(2, 7),
@@ -65,36 +53,15 @@ function MainApp() {
       result: newResult,
     };
 
-    setHistoryItems((prev) => {
-      const updated = [item, ...prev].slice(0, 50);
-      try {
-        localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(updated));
-      } catch (e) {
-        console.warn("Failed to persist history item:", e);
-      }
-      return updated;
-    });
+    setHistoryItems((prev) => [item, ...prev].slice(0, 50));
   };
 
   const handleDeleteHistory = (id: string) => {
-    setHistoryItems((prev) => {
-      const updated = prev.filter((item) => item.id !== id);
-      try {
-        localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(updated));
-      } catch (e) {
-        console.warn("Failed to update history:", e);
-      }
-      return updated;
-    });
+    setHistoryItems((prev) => prev.filter((item) => item.id !== id));
   };
 
   const handleClearAllHistory = () => {
     setHistoryItems([]);
-    try {
-      localStorage.removeItem(HISTORY_STORAGE_KEY);
-    } catch (e) {
-      console.warn("Failed to clear history:", e);
-    }
   };
 
   const handleVerify = async (data: VerifyRequestPayload) => {
