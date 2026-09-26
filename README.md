@@ -48,7 +48,7 @@ TruthLens currently supports:
 - **Verdict + confidence** — return a structured verification result rather than a generic chat response.
 - **Temporal context** — account for dates and time-sensitive claims.
 - **Evidence strength** — surface how strong the available evidence is.
-- **Verification history** — keep recent checks available locally in the browser.
+- **Verification history** — keep recent checks available for the current browser session; persistent verification records are stored in MongoDB.
 - **Feedback collection** — store product feedback in MongoDB.
 - **Verification persistence** — store verification records and result metadata in MongoDB.
 - **Light/dark UI** — switch between themes while keeping the verification workspace readable.
@@ -110,7 +110,7 @@ A result can therefore be **MIXED** or **UNVERIFIED** when the available evidenc
                 │
                 ▼
 ┌───────────────────────────────┐
-│     Express / Netlify API     │
+│     Express / Vercel API     │
 │  /api/verify  /api/feedback   │
 │  /api/health                  │
 └───────┬───────────────┬───────┘
@@ -134,9 +134,9 @@ A result can therefore be **MIXED** or **UNVERIFIED** when the available evidenc
 | AI | Google Gemini API |
 | Documents | Mammoth |
 | Database | MongoDB Atlas |
-| Deployment | Netlify Functions |
+| Deployment | Vercel |
 | Validation | TypeScript |
-| Local persistence | Browser localStorage |
+| Verification history | Session-only browser state + MongoDB persistence |
 
 The AI model is an implementation component; the product's focus is the **verification workflow, evidence trail, provenance, and user experience**.
 
@@ -234,7 +234,7 @@ MONGODB_DB=truthlens
 
 **Never commit this file.**
 
-For local development, keep MongoDB credentials in `.env`. For Netlify, add the same variables through the site's protected environment-variable settings.
+For local development, keep MongoDB credentials in `.env`. For Vercel, add the same variables through the project's protected environment-variable settings.
 
 ### Run locally
 
@@ -293,14 +293,14 @@ Successful feedback is persisted to the `feedbacks` collection.
 
 ## Deployment
 
-TruthLens is configured for Netlify.
+TruthLens is configured for Vercel.
 
-### Netlify configuration
+### Vercel configuration
 
 The repository includes:
 
-- `netlify.toml`
-- `netlify/functions/api.ts`
+- `vercel.json`
+- `api/[...path].ts`
 - Express API integration
 - Vite production build
 - server-side environment variables
@@ -319,7 +319,7 @@ Never place secrets in frontend code or `VITE_*` variables.
 
 Before deploying:
 
-- [ ] Environment variables are configured in Netlify.
+- [ ] Environment variables are configured in Vercel.
 - [ ] MongoDB Atlas network access allows the deployment runtime.
 - [ ] `npm run lint` passes.
 - [ ] `npm run build` passes.
@@ -337,8 +337,8 @@ Before deploying:
 ```text
 .
 ├── assets/                     # Static assets
-├── netlify/
-│   └── functions/api.ts        # Netlify serverless entry
+├── api/
+│   └── [...path].ts             # Vercel catch-all API entry
 ├── src/
 │   ├── components/             # UI and verification views
 │   ├── context/                # Shared React context
@@ -348,7 +348,7 @@ Before deploying:
 │   └── index.css               # Global/theme styles
 ├── server.ts                   # Express API + verification orchestration
 ├── local-server.ts             # Local development host
-├── netlify.toml                # Netlify configuration
+├── vercel.json                 # Vercel configuration
 ├── package.json                # Dependencies and scripts
 ├── tsconfig.json               # TypeScript configuration
 └── vite.config.ts              # Vite configuration
@@ -401,7 +401,7 @@ TruthLens is an evolving open-source project. Important limitations include:
 - Source quantity does not automatically mean source independence.
 - AI reasoning can make mistakes and should be reviewed against the cited evidence.
 - AI-origin detection is probabilistic.
-- Browser history is local to the user's browser/device.
+- Verification history shown in the UI is session-only; persisted verification records are stored server-side in MongoDB.
 - The application currently has no built-in user authentication.
 - There is no comprehensive automated end-to-end test suite yet.
 - Rate limiting and abuse prevention require further hardening.
@@ -424,7 +424,7 @@ These limitations are part of the project's development roadmap, not hidden assu
 - [x] Verification history
 - [x] MongoDB feedback persistence
 - [x] MongoDB verification persistence
-- [x] Netlify deployment
+- [x] Vercel deployment
 
 ### Next
 - [ ] URL verification
