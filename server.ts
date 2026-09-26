@@ -2,9 +2,9 @@ import express from "express";
 import dotenv from "dotenv";
 import { GoogleGenAI } from "@google/genai";
 import mammoth from "mammoth";
-import { MongoClient, Db } from "mongodb";
 import { promises as fs } from "fs";
 import path from "path";
+import { MongoClient, Db } from "mongodb";
 import {
   VerdictType,
   VerificationResult,
@@ -112,6 +112,8 @@ app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", service: "TruthLens", timestamp: new Date().toISOString() });
 });
 
+const feedbackFilePath = path.join(process.cwd(), "data", "feedback.json");
+
 app.post("/api/feedback", async (req, res) => {
   const name = String(req.body?.name || "").trim().replace(/\s+/g, " ");
   const email = String(req.body?.email || "").trim().toLowerCase();
@@ -127,14 +129,18 @@ app.post("/api/feedback", async (req, res) => {
     return res.status(400).json({ error: "Feedback must be between 10 and 3,000 characters." });
   }
 
+  const entry = { id: `feedback-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, name, email, message, submittedAt: new Date().toISOString() };
   try {
-    const db = await getMongoDb();
-    await db.collection("feedbacks").insertOne({
-      name,
-      email,
-      message,
-      createdAt: new Date(),
-    });
+    await fs.mkdir(path.dirname(feedbackFilePath), { recursive: true });
+    let existing: unknown[] = [];
+    try {
+      const raw = await fs.readFile(feedbackFilePath, "utf8");
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) existing = parsed;
+    } catch (error: any) {
+      if (error?.code !== "ENOENT") throw error;
+    }
+    await fs.writeFile(feedbackFilePath, JSON.stringify([...existing, entry].slice(-1000), null, 2) + "\n", "utf8");
     return res.status(201).json({ success: true });
   } catch (error) {
     console.error("Feedback storage error:", error);
@@ -143,6 +149,7 @@ app.post("/api/feedback", async (req, res) => {
     });
   }
 });
+
 
 function decodeXmlEntities(value: string): string {
   return value
@@ -1200,7 +1207,7 @@ function extractKeyEntitiesAndNumbers(text: string): {
 
   // Extract capitalized phrases / named entities (e.g., "Narendra Modi", "Perseverance", "Mars", "NASA", "India GDP")
   const entityMatches = clean.match(/\b[A-Z][a-zA-Z0-9]*(?:\s+[A-Z][a-zA-Z0-9]*)*\b/g) || [];
-  const stopwords = new Set(["The", "A", "An", "Is", "Are", "Was", "Were", "In", "On", "At", "By", "For", "With", "About", "Against", "Between", "Into", "Through", "During", "Before", "After", "Above", "Below", "To", "From", "Up", "Down", "In", "Out", "Off", "Over", "Under", "Again", "Further", "Then", "Once", "Here", "There", "When", "Where", "Why", "How", "All", "Any", "Both", "Each", "Few", "More", "Most", "Other", "Some", "Such", "No", "Nor", "Not", "Only", "Own", "Same", "So", "Than", "Too", "Very", "Can", "Will", "Just", "Don", "Should", "Now"]);
+  const stopwords = new Set<string>(["The", "A", "An", "Is", "Are", "Was", "Were", "In", "On", "At", "By", "For", "With", "About", "Against", "Between", "Into", "Through", "During", "Before", "After", "Above", "Below", "To", "From", "Up", "Down", "In", "Out", "Off", "Over", "Under", "Again", "Further", "Then", "Once", "Here", "There", "When", "Where", "Why", "How", "All", "Any", "Both", "Each", "Few", "More", "Most", "Other", "Some", "Such", "No", "Nor", "Not", "Only", "Own", "Same", "So", "Than", "Too", "Very", "Can", "Will", "Just", "Don", "Should", "Now"]);
   const uniqueEntities = Array.from(new Set(entityMatches.filter((e) => e.length > 2 && !stopwords.has(e))));
 
   // Extract non-stopword keywords

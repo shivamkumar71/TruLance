@@ -35,7 +35,7 @@ const SourceRow:React.FC<{source:VerificationSource;index:number}>=({source,inde
  </div>;
 };
 
-export const ResultView:React.FC<ResultViewProps>=({result,onReset,inputPreviewUrl})=>{
+export const ResultView:React.FC<ResultViewProps>=({result,onReset,onHome,inputPreviewUrl})=>{
  const[copied,setCopied]=useState(false); const[auditOpen,setAuditOpen]=useState(false); const[referenceImageFailed,setReferenceImageFailed]=useState(false); const[showAllSources,setShowAllSources]=useState(false); const[feedbackOpen,setFeedbackOpen]=useState(false); const[feedbackSuccess,setFeedbackSuccess]=useState(false); const[feedbackError,setFeedbackError]=useState(""); const[feedbackSending,setFeedbackSending]=useState(false); const[feedbackForm,setFeedbackForm]=useState({name:"",email:"",message:""});
  const sources=useMemo(()=> (result.sources||[]).filter(s=>Boolean(s.title||s.url||s.canonicalUrl)),[result.sources]);
  const verifiedSources=sources.filter(s=>Boolean(s.isVerified&&safeUrl(s.url||s.canonicalUrl)));
