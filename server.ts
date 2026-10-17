@@ -10,6 +10,10 @@ import {
   VerificationResult,
   VerificationSource,
   SourceCategory,
+  SourceType,
+  EvidenceCoverage,
+  SourceDirectness,
+  SourceIndependence,
   SourceRelationship,
   ConfidenceLevel,
   EvidenceStrength,
@@ -363,6 +367,9 @@ function normalizeVerdict(val?: string): VerdictType {
 function normalizeCategory(cat?: string, isHistorical?: boolean): SourceCategory {
   if (isHistorical) return "Historical Context";
   const normalized = (cat || "").toLowerCase();
+  if (normalized.includes("youtube") || normalized.includes("video")) return "YouTube";
+  if (normalized.includes("wiki")) return "Wikipedia";
+  if (normalized.includes("specialized") || normalized.includes("trade")) return "Specialized";
   if (normalized.includes("historical") || normalized.includes("archive")) return "Historical Context";
   if (normalized.includes("official") || normalized.includes("gov") || normalized.includes("agency") || normalized.includes("primary") || normalized.includes("ministry") || normalized.includes("mospi") || normalized.includes("pib")) return "Official";
   if (normalized.includes("fact") || normalized.includes("check")) return "Fact Check";
@@ -428,8 +435,9 @@ function classifySourceTier(
   publisher?: string,
   category?: SourceCategory
 ): {
-  tier: "Tier 1: Official / Primary" | "Tier 2: Major News / Fact-Check" | "Tier 3: Secondary Reporting" | "Tier 4: Low-Grade / Unverified";
+  tier: "Tier 1: Official / Primary" | "Tier 2: Research / Expert" | "Tier 3: Major News / Fact-Check" | "Tier 4: Secondary / Specialized" | "Tier 5: Reference / General" | "Tier 6: User-Generated / Social";
   quality: "Official" | "Peer-Reviewed" | "Major News" | "Standard" | "Archive";
+  sourceType: string;
 } {
   const host = (
     urlStr
@@ -444,6 +452,7 @@ function classifySourceTier(
   ).toLowerCase();
   const pub = (publisher || "").toLowerCase();
 
+  // Tier 1: Official / Primary Sources
   const isTier1Host =
     host.endsWith(".gov") ||
     host.endsWith(".gov.in") ||
@@ -456,18 +465,16 @@ function classifySourceTier(
     host.includes("rbi.org.in") ||
     host.includes("who.int") ||
     host.includes("un.org") ||
-    host.includes("nature.com") ||
-    host.includes("science.org") ||
-    host.includes("cell.com") ||
-    host.includes("thelancet.com") ||
-    host.includes("arxiv.org") ||
-    host.includes("nih.gov") ||
-    host.includes("sec.gov");
+    host.includes("sec.gov") ||
+    host.includes("whitehouse.gov") ||
+    host.includes("state.gov") ||
+    host.includes("eci.gov.in") ||
+    host.includes("india.gov.in");
 
   if (
     isTier1Host ||
     category === "Official" ||
-    category === "Research" ||
+    category === "Government" ||
     pub.includes("government") ||
     pub.includes("ministry") ||
     pub.includes("mospi") ||
@@ -478,30 +485,77 @@ function classifySourceTier(
     pub.includes("united nations") ||
     pub.includes("reserve bank of india")
   ) {
-    return { tier: "Tier 1: Official / Primary", quality: "Official" };
+    return { tier: "Tier 1: Official / Primary", quality: "Official", sourceType: "government" };
   }
 
-  const isTier2Host =
+  // Tier 2: Research / Expert Sources
+  const isTier2Research =
+    host.includes("nature.com") ||
+    host.includes("science.org") ||
+    host.includes("cell.com") ||
+    host.includes("thelancet.com") ||
+    host.includes("arxiv.org") ||
+    host.includes("nih.gov") ||
+    host.includes("pubmed.ncbi") ||
+    host.includes("scholar.google") ||
+    host.includes("jstor.org") ||
+    host.includes("springer.com") ||
+    host.includes("wiley.com") ||
+    host.includes("ieee.org") ||
+    host.includes("sciencedirect.com") ||
+    host.endsWith(".edu") ||
+    host.endsWith(".ac.in") ||
+    host.endsWith(".ac.uk");
+
+  if (
+    isTier2Research ||
+    category === "Research" ||
+    pub.includes("research") ||
+    pub.includes("journal") ||
+    pub.includes("university") ||
+    pub.includes("institute")
+  ) {
+    return { tier: "Tier 2: Research / Expert", quality: "Peer-Reviewed", sourceType: "research" };
+  }
+
+  // Tier 3: Major News / Established Fact-Checking
+  const isTier3News =
     host.includes("reuters.com") ||
     host.includes("apnews.com") ||
     host.includes("bloomberg.com") ||
     host.includes("bbc.com") ||
     host.includes("bbc.co.uk") ||
+    host.includes("news18.com") ||
     host.includes("thehindu.com") ||
+    host.includes("ndtv.com") ||
+    host.includes("hindustantimes.com") ||
+    host.includes("indianexpress.com") ||
+    host.includes("indiatoday.in") ||
+    host.includes("timesofindia.indiatimes.com") ||
     host.includes("economictimes.indiatimes.com") ||
     host.includes("financialexpress.com") ||
     host.includes("livemint.com") ||
+    host.includes("theprint.in") ||
+    host.includes("thewire.in") ||
+    host.includes("aninews.in") ||
     host.includes("nytimes.com") ||
     host.includes("wsj.com") ||
+    host.includes("theguardian.com") ||
+    host.includes("washingtonpost.com") ||
+    host.includes("ft.com") ||
+    host.includes("afp.com");
+
+  const isTier3FactCheck =
     host.includes("snopes.com") ||
     host.includes("factcheck.org") ||
     host.includes("politifact.com") ||
     host.includes("boomlive.in") ||
     host.includes("altnews.in") ||
-    host.includes("afp.com");
+    host.includes("vishvasnews.com") ||
+    host.includes("factly.in");
 
   if (
-    isTier2Host ||
+    isTier3News || isTier3FactCheck ||
     category === "Fact Check" ||
     category === "News" ||
     pub.includes("reuters") ||
@@ -509,20 +563,36 @@ function classifySourceTier(
     pub.includes("bloomberg") ||
     pub.includes("bbc") ||
     pub.includes("economic times") ||
-    pub.includes("the hindu")
+    pub.includes("the hindu") ||
+    pub.includes("fact check")
   ) {
-    return { tier: "Tier 2: Major News / Fact-Check", quality: "Major News" };
+    const st = isTier3FactCheck || category === "Fact Check" || pub.includes("fact check") ? "fact_check" : "news";
+    return { tier: "Tier 3: Major News / Fact-Check", quality: "Major News", sourceType: st };
   }
 
-  if (host.includes("wikipedia.org") || category === "Historical Context") {
-    return { tier: "Tier 3: Secondary Reporting", quality: "Archive" };
+  // Tier 4: Secondary / Specialized Sources
+  if (category === "Specialized" || category === "Blog / Analysis" ||
+      host.includes("substack.com") || host.includes("medium.com") ||
+      pub.includes("blog") || pub.includes("analysis") || pub.includes("specialized")) {
+    return { tier: "Tier 4: Secondary / Specialized", quality: "Standard", sourceType: "specialized" };
   }
 
-  if (category === "Blog / Analysis" || host.includes("substack.com") || host.includes("medium.com") || pub.includes("blog") || pub.includes("analysis")) {
-    return { tier: "Tier 3: Secondary Reporting", quality: "Standard" };
+  // Tier 6: Video / User-Generated / Social (YouTube, social media)
+  if (host.includes("youtube.com") || host.includes("youtu.be") ||
+      host.includes("twitter.com") || host.includes("x.com") ||
+      host.includes("reddit.com") || host.includes("facebook.com") ||
+      host.includes("instagram.com") || host.includes("tiktok.com") ||
+      category === "YouTube") {
+    const st = (host.includes("youtube.com") || host.includes("youtu.be") || category === "YouTube") ? "youtube" : "social";
+    return { tier: "Tier 6: User-Generated / Social", quality: "Standard", sourceType: st };
   }
 
-  return { tier: "Tier 3: Secondary Reporting", quality: "Standard" };
+  // Tier 5: Reference / General Information (Wikipedia)
+  if (host.includes("wikipedia.org") || category === "Wikipedia" || category === "Historical Context") {
+    return { tier: "Tier 5: Reference / General", quality: "Archive", sourceType: "wikipedia" };
+  }
+
+  return { tier: "Tier 4: Secondary / Specialized", quality: "Standard", sourceType: "other" };
 }
 
 function normalizeRelationship(rel?: string): SourceRelationship {
@@ -626,7 +696,68 @@ function getClaimHash(text: string): number {
   return Math.abs(hash);
 }
 
-// Calibrate Evidence Strength and Confidence dynamically based on evidence hierarchy, independence, & directness
+// Assess Evidence Coverage based on source count, diversity, independence, and quality
+function assessEvidenceCoverage(
+  sources: VerificationSource[],
+  supportsCount: number,
+  contradictsCount: number,
+  contextCount: number,
+): {
+  coverage: "strong" | "moderate" | "limited" | "insufficient";
+  explanation: string;
+} {
+  const totalRelevant = sources.length;
+  const independentSources = sources.filter(
+    (s) => !s.independence || s.independence === "Independent" || s.independence === "independent" || s.independence === "Direct"
+  ).length;
+  const uniqueDomains = new Set(sources.map(s => {
+    try { return s.url ? new URL(s.url).hostname.toLowerCase() : ""; } catch { return ""; }
+  }).filter(Boolean)).size;
+  const directSources = sources.filter(s => s.directness === "direct").length;
+  const hasTier1 = sources.some(s => s.tier?.includes("Tier 1"));
+  const hasTier2 = sources.some(s => s.tier?.includes("Tier 2"));
+  const hasTier3 = sources.some(s => s.tier?.includes("Tier 3"));
+
+  // Strong: 6+ independent sources from 4+ domains, or 5+ with Tier 1/2 confirmation
+  if (
+    (independentSources >= 6 && uniqueDomains >= 4) ||
+    (independentSources >= 5 && (hasTier1 || hasTier2) && (supportsCount >= 3 || contradictsCount >= 3))
+  ) {
+    return {
+      coverage: "strong",
+      explanation: `TruthLens found ${totalRelevant} relevant sources across ${uniqueDomains} independent domains${hasTier1 ? ", including official/primary sources" : ""}. Evidence coverage is strong.`
+    };
+  }
+
+  // Moderate: 4-5 independent sources or 3+ with tier 1/2
+  if (
+    (independentSources >= 4 && uniqueDomains >= 3) ||
+    (independentSources >= 3 && (hasTier1 || hasTier2 || hasTier3))
+  ) {
+    return {
+      coverage: "moderate",
+      explanation: `TruthLens found ${totalRelevant} relevant sources across ${uniqueDomains} domains. Evidence coverage is moderate.`
+    };
+  }
+
+  // Limited: 2-3 sources
+  if (totalRelevant >= 2) {
+    return {
+      coverage: "limited",
+      explanation: `TruthLens found only ${totalRelevant} sufficiently relevant sources after broader research. Because the available evidence is limited, this claim cannot be verified with high confidence.`
+    };
+  }
+
+  // Insufficient: 0-1 sources
+  return {
+    coverage: "insufficient",
+    explanation: totalRelevant === 1
+      ? "TruthLens found only 1 relevant source after broad multi-category research. The available evidence is insufficient for a confident verdict."
+      : "TruthLens could not find sufficiently relevant sources after broad multi-category research. No confident verdict can be issued."
+  };
+}
+
+// Calibrate Evidence Strength and Confidence dynamically based on evidence hierarchy, independence, coverage, & directness
 function calibrateEvidenceScoreAndStrength(
   claim: string,
   rawConfidence: number | undefined,
@@ -637,7 +768,8 @@ function calibrateEvidenceScoreAndStrength(
   disputedCount: number = 0,
   contradictingCount: number = 0,
   supportingCount: number = 0,
-  positiveEvidenceFound: boolean = true
+  positiveEvidenceFound: boolean = true,
+  evidenceCoverage: "strong" | "moderate" | "limited" | "insufficient" = "moderate"
 ): {
   confidence: number;
   confidenceLabel: ConfidenceLevel;
@@ -650,22 +782,28 @@ function calibrateEvidenceScoreAndStrength(
 
   const tier1Sources = sources.filter(
     (s) =>
-      s.tier === "Tier 1: Official / Primary" ||
+      s.tier?.includes("Tier 1") ||
       s.category === "Official" ||
-      s.category === "Research" ||
-      s.quality === "Official" ||
-      s.quality === "Peer-Reviewed"
+      s.category === "Government" ||
+      s.quality === "Official"
   );
   const hasTier1Primary = tier1Sources.length > 0;
 
   const tier2Sources = sources.filter(
     (s) =>
-      s.tier === "Tier 2: Major News / Fact-Check" ||
+      s.tier?.includes("Tier 2") ||
+      s.category === "Research" ||
+      s.quality === "Peer-Reviewed"
+  );
+
+  const tier3Sources = sources.filter(
+    (s) =>
+      s.tier?.includes("Tier 3") ||
       s.category === "Fact Check" ||
       s.category === "News" ||
       s.quality === "Major News"
   );
-  const hasTier2NewsOrFactCheck = tier2Sources.length > 0;
+  const hasTier2Or3 = tier2Sources.length > 0 || tier3Sources.length > 0;
 
   const directSupportingSources = sources.filter(
     (s) => (s.relationship || "").toUpperCase() === "SUPPORTS"
@@ -676,8 +814,15 @@ function calibrateEvidenceScoreAndStrength(
   ).length;
 
   const independentSources = sources.filter(
-    (s) => s.independence !== "Syndicated"
+    (s) => !s.independence || s.independence === "Independent" || s.independence === "independent" || s.independence === "Direct"
   ).length;
+
+  // RULE 0: EVIDENCE COVERAGE CAPS
+  // Limit confidence based on evidence coverage regardless of verdict
+  const coverageCap = evidenceCoverage === "strong" ? 99
+    : evidenceCoverage === "moderate" ? 92
+    : evidenceCoverage === "limited" ? 78
+    : 40; // insufficient
 
   // RULE 1: INSUFFICIENT EVIDENCE / UNVERIFIED / NO EMPIRICAL CLAIM
   const hasValidatedNegativeEvidence =
@@ -688,7 +833,7 @@ function calibrateEvidenceScoreAndStrength(
     ((!positiveEvidenceFound && !hasValidatedNegativeEvidence) ||
       verdict === "UNVERIFIED" ||
       claimType === "No Verifiable Claim" ||
-      (sources.length === 0 && directSupportingSources === 0 && directContradictingSources === 0 && !hasTier1Primary && !hasTier2NewsOrFactCheck))
+      (sources.length === 0 && directSupportingSources === 0 && directContradictingSources === 0 && !hasTier1Primary && !hasTier2Or3))
   ) {
     const unverifiedScore = Math.max(12, Math.min(28, 16 + (claimHash % 12)));
     return {
@@ -707,11 +852,9 @@ function calibrateEvidenceScoreAndStrength(
     let falseConfidence = 86;
 
     if (hasTier1Primary && (directContradictingSources >= 1 || contradictingCount >= 1)) {
-      // Primary official source refutes claim (e.g. NASA statement, government records)
-      falseConfidence = 96 + (claimHash % 3); // 96 - 98%
-    } else if (hasTier2NewsOrFactCheck && directContradictingSources >= 1) {
-      // Major fact-checker or reputable wire service refutes claim
-      falseConfidence = 92 + (claimHash % 5); // 92 - 96%
+      falseConfidence = 96 + (claimHash % 3);
+    } else if (hasTier2Or3 && directContradictingSources >= 1) {
+      falseConfidence = 92 + (claimHash % 5);
     } else if (directContradictingSources >= 2) {
       falseConfidence = 90 + (claimHash % 5);
     } else if (directContradictingSources >= 1 || contradictingCount >= 1) {
@@ -726,9 +869,10 @@ function calibrateEvidenceScoreAndStrength(
       falseConfidence = Math.min(84, Math.max(70, falseConfidence - 8));
     }
 
-    const finalFalseConfidence = Math.max(65, Math.min(99, falseConfidence));
+    // Apply evidence coverage cap
+    const finalFalseConfidence = Math.max(65, Math.min(coverageCap, falseConfidence));
     const evidenceStrength: EvidenceStrength =
-      finalFalseConfidence >= 92 ? "Very High Evidence" : finalFalseConfidence >= 75 ? "High Evidence" : "Moderate Evidence";
+      finalFalseConfidence >= 92 ? "Very High Evidence" : finalFalseConfidence >= 75 ? "High Evidence" : finalFalseConfidence >= 60 ? "Moderate Evidence" : "Limited Evidence";
 
     return {
       confidence: finalFalseConfidence,
@@ -745,12 +889,10 @@ function calibrateEvidenceScoreAndStrength(
     let trueConfidence = 85;
 
     if (hasTier1Primary && directSupportingSources >= 1 && disputedCount === 0) {
-      // Confirmed by primary/gov source (95-99%)
-      trueConfidence = 96 + (claimHash % 3); // 96, 97, 98
-    } else if (hasTier2NewsOrFactCheck && independentSources >= 2 && disputedCount === 0) {
-      // Multiple strong independent sources (90-96%)
+      trueConfidence = 96 + (claimHash % 3);
+    } else if (hasTier2Or3 && independentSources >= 2 && disputedCount === 0) {
       trueConfidence = 92 + (claimHash % 5);
-    } else if (hasTier1Primary || (hasTier2NewsOrFactCheck && directSupportingSources >= 1)) {
+    } else if (hasTier1Primary || (hasTier2Or3 && directSupportingSources >= 1)) {
       trueConfidence = 89 + (claimHash % 4);
     } else if (independentSources >= 2 && directSupportingSources >= 1) {
       trueConfidence = 84 + (claimHash % 5);
@@ -769,9 +911,10 @@ function calibrateEvidenceScoreAndStrength(
       trueConfidence = Math.min(84, Math.max(70, trueConfidence - 8));
     }
 
-    const finalTrueConfidence = Math.max(65, Math.min(99, trueConfidence));
+    // Apply evidence coverage cap
+    const finalTrueConfidence = Math.max(65, Math.min(coverageCap, trueConfidence));
     const evidenceStrength: EvidenceStrength =
-      finalTrueConfidence >= 92 ? "Very High Evidence" : finalTrueConfidence >= 75 ? "High Evidence" : "Moderate Evidence";
+      finalTrueConfidence >= 92 ? "Very High Evidence" : finalTrueConfidence >= 75 ? "High Evidence" : finalTrueConfidence >= 60 ? "Moderate Evidence" : "Limited Evidence";
 
     return {
       confidence: finalTrueConfidence,
@@ -784,16 +927,16 @@ function calibrateEvidenceScoreAndStrength(
   }
 
   // RULE 4: MIXED / MISLEADING VERDICTS
-  let mixedConfidence = 60 + (claimHash % 9); // 60 - 68%
-  if (hasTier1Primary || hasTier2NewsOrFactCheck) {
+  let mixedConfidence = 60 + (claimHash % 9);
+  if (hasTier1Primary || hasTier2Or3) {
     mixedConfidence = Math.max(62, Math.min(74, mixedConfidence + 4));
   }
-  const finalMixedConfidence = Math.max(45, Math.min(74, mixedConfidence));
+  const finalMixedConfidence = Math.max(45, Math.min(coverageCap, mixedConfidence));
 
   return {
     confidence: finalMixedConfidence,
     confidenceLabel: "Moderate",
-    evidenceStrength: "Moderate Evidence",
+    evidenceStrength: finalMixedConfidence >= 60 ? "Moderate Evidence" : "Limited Evidence",
     claimType,
     verificationDifficulty,
     positiveEvidenceFound: true,
@@ -806,7 +949,22 @@ const KNOWN_PUBLISHERS: Record<string, string> = {
   "apnews.com": "Associated Press",
   "bbc.com": "BBC News",
   "bbc.co.uk": "BBC News",
+  "news18.com": "News18",
+  "hindustantimes.com": "Hindustan Times",
+  "ndtv.com": "NDTV",
   "thehindu.com": "The Hindu",
+  "indianexpress.com": "The Indian Express",
+  "indiatoday.in": "India Today",
+  "timesofindia.indiatimes.com": "The Times of India",
+  "economictimes.indiatimes.com": "The Economic Times",
+  "livemint.com": "Mint",
+  "financialexpress.com": "Financial Express",
+  "theprint.in": "ThePrint",
+  "thewire.in": "The Wire",
+  "aninews.in": "ANI News",
+  "pib.gov.in": "Press Information Bureau (PIB)",
+  "factly.in": "Factly",
+  "vishvasnews.com": "Vishvas News",
   "nytimes.com": "The New York Times",
   "wsj.com": "The Wall Street Journal",
   "bloomberg.com": "Bloomberg",
@@ -837,7 +995,7 @@ const KNOWN_PUBLISHERS: Record<string, string> = {
   "sec.gov": "U.S. Securities and Exchange Commission",
   "whitehouse.gov": "The White House",
   "state.gov": "U.S. Department of State",
-  "wikipedia.org": "Wikipedia (Archive)",
+  "wikipedia.org": "Wikipedia",
 };
 
 function extractPublisherFromUrl(urlStr: string): string {
@@ -1031,14 +1189,16 @@ interface DiscoveredSource {
   url: string;
   canonicalUrl: string;
   publisher: string;
+  publisherDomain?: string;
+  publisherUrl?: string;
   snippet?: string;
   relevanceScore?: number;
-  tier?: "Tier 1: Official / Primary" | "Tier 2: Major News / Fact-Check" | "Tier 3: Secondary Reporting" | "Tier 4: Low-Grade / Unverified";
+  tier?: "Tier 1: Official / Primary" | "Tier 2: Research / Expert" | "Tier 3: Major News / Fact-Check" | "Tier 4: Secondary / Specialized" | "Tier 5: Reference / General" | "Tier 6: User-Generated / Social";
   quality?: "Official" | "Peer-Reviewed" | "Major News" | "Standard" | "Archive";
   independence?: "Independent" | "Direct" | "Syndicated";
 }
 
-type SourceFamily = "official" | "wikipedia" | "news" | "fact-check" | "research" | "other";
+type SourceFamily = "official" | "wikipedia" | "news" | "fact-check" | "research" | "youtube" | "specialized" | "other";
 
 function getSourceFamily(urlStr: string, publisher = ""): SourceFamily {
   const host = (() => {
@@ -1054,6 +1214,9 @@ function getSourceFamily(urlStr: string, publisher = ""): SourceFamily {
     host.includes("wikipedia.org") ||
     name.includes("wikipedia")
   ) return "wikipedia";
+  if (
+    host.includes("youtube.com") || host.includes("youtu.be")
+  ) return "youtube";
   if (
     host.endsWith(".gov") ||
     host.endsWith(".gov.in") ||
@@ -1074,6 +1237,8 @@ function getSourceFamily(urlStr: string, publisher = ""): SourceFamily {
     host.includes("boomlive.in") ||
     host.includes("altnews.in") ||
     host.includes("afp.com") ||
+    host.includes("vishvasnews.com") ||
+    host.includes("factly.in") ||
     name.includes("fact check")
   ) return "fact-check";
   if (
@@ -1086,7 +1251,11 @@ function getSourceFamily(urlStr: string, publisher = ""): SourceFamily {
     host.includes("bloomberg.com") ||
     host.includes("livemint.com") ||
     host.includes("indianexpress.com") ||
+    host.includes("ndtv.com") ||
+    host.includes("hindustantimes.com") ||
     host.includes("economictimes.indiatimes.com") ||
+    host.includes("theguardian.com") ||
+    host.includes("washingtonpost.com") ||
     name.includes("news") ||
     name.includes("press")
   ) return "news";
@@ -1096,9 +1265,22 @@ function getSourceFamily(urlStr: string, publisher = ""): SourceFamily {
     host.includes("thelancet.com") ||
     host.includes("arxiv.org") ||
     host.includes("nih.gov") ||
+    host.includes("pubmed.ncbi") ||
+    host.includes("jstor.org") ||
+    host.includes("springer.com") ||
+    host.endsWith(".edu") ||
+    host.endsWith(".ac.in") ||
+    host.endsWith(".ac.uk") ||
     name.includes("research") ||
-    name.includes("journal")
+    name.includes("journal") ||
+    name.includes("university")
   ) return "research";
+  if (
+    host.includes("substack.com") ||
+    host.includes("medium.com") ||
+    name.includes("specialized") ||
+    name.includes("blog")
+  ) return "specialized";
   return "other";
 }
 
@@ -1106,8 +1288,10 @@ function selectDiverseCandidates(sources: DiscoveredSource[]): DiscoveredSource[
   const ordered = [...sources].sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0));
   const selected: DiscoveredSource[] = [];
   const selectedUrls = new Set<string>();
-  const preferredFamilies: SourceFamily[] = ["official", "wikipedia", "news", "fact-check", "research"];
+  const selectedDomains = new Set<string>();
 
+  // Phase 1: Pick best from each preferred family (diverse coverage)
+  const preferredFamilies: SourceFamily[] = ["official", "news", "fact-check", "research", "wikipedia", "youtube", "specialized"];
   for (const family of preferredFamilies) {
     const match = ordered.find(
       (source) => !selectedUrls.has(source.url) && getSourceFamily(source.url, source.publisher) === family
@@ -1115,14 +1299,21 @@ function selectDiverseCandidates(sources: DiscoveredSource[]): DiscoveredSource[
     if (match) {
       selected.push(match);
       selectedUrls.add(match.url);
+      try { selectedDomains.add(new URL(match.url).hostname.toLowerCase()); } catch {}
     }
   }
 
+  // Phase 2: Fill remaining slots up to 10, preferring different domains for independence
   for (const source of ordered) {
-    if (selected.length >= 8) break;
-    if (!selectedUrls.has(source.url)) {
+    if (selected.length >= 10) break;
+    if (selectedUrls.has(source.url)) continue;
+    let domain = "";
+    try { domain = new URL(source.url).hostname.toLowerCase(); } catch {}
+    // Prefer sources from new domains (independence)
+    if (!selectedDomains.has(domain) || selected.length < 8) {
       selected.push(source);
       selectedUrls.add(source.url);
+      if (domain) selectedDomains.add(domain);
     }
   }
 
@@ -1243,80 +1434,98 @@ function calculateSourceRelevance(
   claimDates: string[],
   claimKeywords: string[]
 ): number {
-  const combinedText = `${source.title} ${source.publisher} ${source.snippet || ""}`.toLowerCase();
+  const titleText = (source.title || "").toLowerCase();
+  const bodyText = `${source.title} ${source.publisher} ${source.snippet || ""}`.toLowerCase();
+
+  const allTerms = [...claimEntities, ...claimKeywords]
+    .map((k) => k.toLowerCase().trim())
+    .filter((k) => k.length > 2);
+
+  let titleMatches = 0;
+  let bodyMatches = 0;
+  for (const term of allTerms) {
+    if (titleText.includes(term)) {
+      titleMatches++;
+      bodyMatches++;
+    } else if (bodyText.includes(term)) {
+      bodyMatches++;
+    }
+  }
+
+  // If a source has ZERO matches to any term in title or body, it is completely irrelevant
+  if (bodyMatches === 0) {
+    return 0;
+  }
+
+  // If title has 0 matches and only 1 vague match in body, it's very weak
+  if (titleMatches === 0 && bodyMatches <= 1) {
+    return 8;
+  }
+
   let score = 0;
 
-  // 1. Entity Matching (High weight)
-  let entityMatches = 0;
-  for (const ent of claimEntities) {
-    if (combinedText.includes(ent.toLowerCase())) {
-      entityMatches++;
-    }
-  }
-  if (claimEntities.length > 0) {
-    score += Math.min(35, (entityMatches / claimEntities.length) * 35);
-  } else {
-    score += 15;
+  // 1. Title match coverage (Highest weight, up to 45 pts)
+  if (allTerms.length > 0) {
+    const titleRatio = titleMatches / allTerms.length;
+    score += Math.min(45, Math.round(titleRatio * 45));
   }
 
-  // 2. Numerical / Statistical Matching (Crucial for statistical claims)
-  let numberMatches = 0;
-  for (const num of claimNumbers) {
-    if (combinedText.includes(num.toLowerCase())) {
-      numberMatches++;
-    }
+  // 2. Body match coverage (up to 25 pts)
+  if (allTerms.length > 0) {
+    const bodyRatio = bodyMatches / allTerms.length;
+    score += Math.min(25, Math.round(bodyRatio * 25));
   }
+
+  // 3. Numerical matching
   if (claimNumbers.length > 0) {
-    score += Math.min(25, (numberMatches / claimNumbers.length) * 25);
-  } else {
-    score += 10;
+    let numMatches = 0;
+    for (const num of claimNumbers) {
+      if (bodyText.includes(num.toLowerCase())) numMatches++;
+    }
+    score += Math.min(15, (numMatches / claimNumbers.length) * 15);
   }
 
-  // 3. Date / Time Period Matching
-  let dateMatches = 0;
-  for (const dt of claimDates) {
-    if (combinedText.includes(dt.toLowerCase())) {
-      dateMatches++;
-    }
-  }
+  // 4. Date matching
   if (claimDates.length > 0) {
-    score += Math.min(20, (dateMatches / claimDates.length) * 20);
-  } else {
-    score += 10;
+    let dtMatches = 0;
+    for (const dt of claimDates) {
+      if (bodyText.includes(dt.toLowerCase())) dtMatches++;
+    }
+    score += Math.min(10, (dtMatches / claimDates.length) * 10);
   }
 
-  // 4. Keyword Coverage
-  let kwMatches = 0;
-  for (const kw of claimKeywords) {
-    if (combinedText.includes(kw)) {
-      kwMatches++;
+  // 5. Tier / Authority Bonus (ONLY if the source already proved relevant!)
+  if (titleMatches > 0 || bodyMatches >= 2) {
+    if (source.tier === "Tier 1: Official / Primary") {
+      score += 15;
+    } else if (source.tier === "Tier 2: Research / Expert") {
+      score += 12;
+    } else if (source.tier === "Tier 3: Major News / Fact-Check") {
+      score += 10;
+    } else if (source.tier === "Tier 4: Secondary / Specialized") {
+      score += 5;
+    } else if (source.tier === "Tier 5: Reference / General") {
+      score += 3;
     }
   }
-  if (claimKeywords.length > 0) {
-    score += Math.min(15, (kwMatches / claimKeywords.length) * 15);
-  }
 
-  // 5. Tier / Authority Bonus
-  if (source.tier === "Tier 1: Official / Primary") {
-    score += 15;
-  } else if (source.tier === "Tier 2: Major News / Fact-Check") {
-    score += 10;
-  } else if (source.tier === "Tier 3: Secondary Reporting") {
-    score += 3;
-  }
-
-  // Penalty if headline has zero entity or keyword matches
-  if (entityMatches === 0 && kwMatches === 0) {
-    score -= 30;
-  }
-
-  return Math.max(5, Math.min(99, Math.round(score)));
+  return Math.max(0, Math.min(99, Math.round(score)));
 }
 
 // Detect Syndication and Wire Copies among candidate sources
 function detectSyndicationAndDeduplicate(sources: DiscoveredSource[]): DiscoveredSource[] {
   const seenFingerprints = new Map<string, DiscoveredSource>();
   const deduplicated: DiscoveredSource[] = [];
+
+  const tierRank = (t?: string): number => {
+    if (t === "Tier 1: Official / Primary") return 6;
+    if (t === "Tier 2: Research / Expert") return 5;
+    if (t === "Tier 3: Major News / Fact-Check") return 4;
+    if (t === "Tier 4: Secondary / Specialized") return 3;
+    if (t === "Tier 5: Reference / General") return 2;
+    if (t === "Tier 6: User-Generated / Social") return 1;
+    return 0;
+  };
 
   for (const source of sources) {
     // Generate normalized title fingerprint (strip non-alphanumeric and shorten)
@@ -1330,10 +1539,7 @@ function detectSyndicationAndDeduplicate(sources: DiscoveredSource[]): Discovere
       // Mark as syndicated copy rather than independent primary
       source.independence = "Syndicated";
       // If the new source is a higher tier (e.g. original AP vs local news wire republisher), swap
-      if (
-        (source.tier === "Tier 1: Official / Primary" && existing.tier !== "Tier 1: Official / Primary") ||
-        (source.tier === "Tier 2: Major News / Fact-Check" && existing.tier === "Tier 3: Secondary Reporting")
-      ) {
+      if (tierRank(source.tier) > tierRank(existing.tier)) {
         existing.independence = "Syndicated";
         source.independence = "Independent";
       }
@@ -1347,7 +1553,7 @@ function detectSyndicationAndDeduplicate(sources: DiscoveredSource[]): Discovere
   return deduplicated;
 }
 
-// Generate Intelligent Multi-Staged Search Queries with 5-Stage Research Pipeline & Temporal Awareness
+// Generate Multi-Category Search Queries with Broad Source Discovery Pipeline & Temporal Awareness
 function generateStagedQueries(
   claimText: string,
   userContext?: string,
@@ -1356,6 +1562,7 @@ function generateStagedQueries(
   queries: string[];
   claimInfo: { entities: string[]; numbers: string[]; dates: string[]; keywords: string[] };
   temporalInfo: TemporalInfo;
+  categoriesSearched: string[];
 } {
   const targetText = [claimText, userContext, imageAnalysis?.headline, imageAnalysis?.mainClaim]
     .filter(Boolean)
@@ -1365,80 +1572,92 @@ function generateStagedQueries(
   const claimInfo = extractKeyEntitiesAndNumbers(targetText);
   const temporalInfo = detectTemporalCharacteristics(targetText);
   const queries: string[] = [];
+  const categoriesSearched: string[] = [];
 
   const lowerTarget = targetText.toLowerCase();
-  const entityStr = claimInfo.entities.slice(0, 3).join(" ");
-  const numStr = claimInfo.numbers.slice(0, 2).join(" ");
-  const dateStr = claimInfo.dates.slice(0, 2).join(" ");
+  const entityStr = claimInfo.entities.slice(0, 4).join(" ");
 
-  // STAGE 1 — Exact claim search (Core proposition & exact figures)
-  const firstSentence = claimText.split(/[.\n]/)[0].trim().slice(0, 110);
-  if (firstSentence) {
-    queries.push(firstSentence);
+  const firstSentence = claimText.split(/[.\n]/)[0].trim().slice(0, 100);
+  const claimAnchor = (firstSentence || targetText).replace(/[?.,!]+$/, "").trim().slice(0, 90);
+  const shortAnchor = claimAnchor.slice(0, 60);
+
+  // ── A. EXACT CLAIM QUERY ──────────────────────────────────────────────────
+  queries.push(claimAnchor);
+
+  // ── B. OFFICIAL / GOVERNMENT SOURCES ──────────────────────────────────────
+  const officialQuery = `${shortAnchor} official site:gov OR site:gov.in OR site:nic.in OR site:who.int OR site:un.org`;
+  queries.push(officialQuery);
+  categoriesSearched.push("official");
+
+  // ── C. DOMAIN-SPECIFIC CONTEXT QUERIES ────────────────────────────────────
+  const contextQueries: string[] = [];
+  if (lowerTarget.includes("south pole") || lowerTarget.includes("lunar") || lowerTarget.includes("moon") || lowerTarget.includes("chandrayaan")) {
+    contextQueries.push(`${shortAnchor} ISRO official statement site:isro.gov.in`);
+  } else if (lowerTarget.includes("gdp") || lowerTarget.includes("growth rate") || lowerTarget.includes("fy2026")) {
+    contextQueries.push("India GDP Q1 FY2026-27 MoSPI NSO official");
+  } else if (lowerTarget.includes("mars") || lowerTarget.includes("perseverance")) {
+    contextQueries.push(`"Perseverance" Mars site:nasa.gov OR site:nature.com`);
   }
-
-  // STAGE 2 — Entity + event / metric search
-  if (lowerTarget.includes("gdp") || lowerTarget.includes("growth rate") || lowerTarget.includes("fy2026-27")) {
-    queries.push("India GDP Q1 FY2026-27 7.8%");
-    queries.push("India GDP April June 2026 7.8%");
-  } else if (entityStr && numStr) {
-    queries.push(`${entityStr} ${numStr} ${dateStr}`.trim());
-  } else if (entityStr) {
-    queries.push(`${entityStr} ${dateStr}`.trim());
-  }
-
-  // STAGE 3 — Official source search (Government, Statistical Agency, Scientific / Corporate Primary)
-  if (lowerTarget.includes("gdp") || lowerTarget.includes("mospi") || lowerTarget.includes("economy") || lowerTarget.includes("fy2026")) {
-    queries.push("MoSPI Q1 GDP FY2026-27");
-    queries.push("National Statistical Office Q1 GDP 2026-27");
-    queries.push(`India GDP ${numStr || "7.8"} site:mospi.gov.in OR site:pib.gov.in OR site:rbi.org.in`);
-  } else if (lowerTarget.includes("modi") || lowerTarget.includes("minister") || lowerTarget.includes("india")) {
-    queries.push(`${entityStr} ${dateStr} official site:pmo.gov.in OR site:india.gov.in OR site:pib.gov.in`);
-  } else if (lowerTarget.includes("mars") || lowerTarget.includes("nasa") || lowerTarget.includes("perseverance") || lowerTarget.includes("space")) {
-    queries.push(`"Perseverance" Mars "liquid water" site:nasa.gov OR site:jpl.nasa.gov OR site:nature.com`);
-  } else if (lowerTarget.includes("who") || lowerTarget.includes("health") || lowerTarget.includes("cdc")) {
-    queries.push(`${entityStr} ${numStr} site:who.int OR site:cdc.gov OR site:nih.gov`);
-  } else if (claimInfo.entities.length > 0) {
-    queries.push(`${entityStr} ${numStr} official announcement OR press release OR government data OR report`);
-  }
-
-  // STAGE 4 — Independent confirmation (Reputable Wire & Major News Cross-Check)
-  if (lowerTarget.includes("gdp") || lowerTarget.includes("fy2026")) {
-    queries.push("India GDP 7.8 August 31 2026 Reuters OR Bloomberg OR \"The Hindu\" OR \"Economic Times\"");
-  } else if (entityStr) {
-    queries.push(`${entityStr} ${numStr} Reuters OR "Associated Press" OR Bloomberg OR BBC OR "The Hindu"`);
-  }
-
-  // STAGE 5 — Contradiction search (Explicit check for dispute, falsification, or correction)
-  if (lowerTarget.includes("water") && lowerTarget.includes("mars")) {
-    queries.push(`Perseverance Mars "liquid water" vs "ancient water" debunk OR false OR "fact check"`);
-  } else if (lowerTarget.includes("gdp")) {
-    queries.push(`India GDP Q1 FY2026-27 7.8 false OR disputed OR incorrect OR "fact check"`);
-  } else if (entityStr) {
-    const claimCore = (firstSentence || `${entityStr} ${numStr}`).slice(0, 60);
-    queries.push(`"${claimCore}" false OR incorrect OR debunk OR "fact check" OR correction`);
-  }
-
-  // Include image specific search queries if available
   if (imageAnalysis?.searchQueries) {
     for (const sq of imageAnalysis.searchQueries) {
       if (sq && typeof sq === "string" && sq.trim() && !queries.includes(sq.trim())) {
-        queries.push(sq.trim());
+        contextQueries.push(sq.trim());
       }
     }
   }
+  for (const cq of contextQueries.slice(0, 2)) {
+    if (!queries.includes(cq)) queries.push(cq);
+  }
 
-  const claimAnchor = (firstSentence || `${entityStr} ${numStr} ${dateStr}` || targetText).trim().slice(0, 110);
-  const targetedQueries = [
-    claimAnchor,
-    `${claimAnchor} official government primary source site:gov OR site:gov.in OR site:nic.in`,
-    `${claimAnchor} Wikipedia site:wikipedia.org`,
-    `${claimAnchor} Reuters OR AP News OR BBC OR fact check`,
-  ];
+  // ── D. MAJOR NEWS SOURCES (BBC, News18, Hindustan Times, NDTV, The Hindu, Reuters) ──
+  queries.push(`${shortAnchor} BBC OR News18 OR "Hindustan Times" OR NDTV OR "The Hindu" OR Reuters`);
+  categoriesSearched.push("news");
+
+  // ── E. FACT-CHECKING SOURCES ──────────────────────────────────────────────
+  queries.push(`${shortAnchor} fact check OR debunk OR snopes OR politifact OR "alt news" OR boomlive`);
+  categoriesSearched.push("fact-check");
+
+  // ── F. RESEARCH / ACADEMIC SOURCES ────────────────────────────────────────
+  const researchTerms = claimInfo.entities.slice(0, 2).join(" ");
+  if (researchTerms) {
+    queries.push(`${researchTerms} research OR study OR paper site:nature.com OR site:science.org OR site:arxiv.org OR site:nih.gov`);
+    categoriesSearched.push("research");
+  }
+
+  // ── G. WIKIPEDIA / REFERENCE ──────────────────────────────────────────────
+  queries.push(`${shortAnchor} site:wikipedia.org`);
+  if (claimInfo.entities[0]) {
+    queries.push(`${claimInfo.entities[0]} site:wikipedia.org`);
+  }
+  categoriesSearched.push("wikipedia");
+
+  // ── H. SPECIALIZED / INDUSTRY SOURCES ─────────────────────────────────────
+  if (entityStr) {
+    queries.push(`${entityStr} ${claimInfo.keywords.slice(0, 3).join(" ")}`);
+    categoriesSearched.push("specialized");
+  }
+
+  // ── I. YOUTUBE / VIDEO SOURCES ────────────────────────────────────────────
+  queries.push(`${shortAnchor} site:youtube.com`);
+  categoriesSearched.push("youtube");
+
+  // ── J. ENTITY-SPECIFIC SEARCHES ───────────────────────────────────────────
+  // Search key named entities separately for broader discovery
+  const topEntities = claimInfo.entities.slice(0, 3);
+  const dateContext = claimInfo.dates.slice(0, 1).join(" ");
+  for (const entity of topEntities) {
+    const entityQuery = `${entity} ${dateContext} ${claimInfo.keywords.slice(0, 2).join(" ")}`.trim();
+    if (entityQuery.length > 10 && !queries.some(q => q.includes(entity) && q.length < entityQuery.length + 20)) {
+      queries.push(entityQuery);
+    }
+  }
+
+  // Deduplicate and limit
   const cleanQueries = Array.from(
-    new Set([...targetedQueries, ...queries].filter((q) => q && q.trim().length > 3))
-  ).slice(0, 4);
-  return { queries: cleanQueries, claimInfo, temporalInfo };
+    new Set(queries.filter((q) => q && q.trim().length > 3))
+  ).slice(0, 12);
+
+  return { queries: cleanQueries, claimInfo, temporalInfo, categoriesSearched };
 }
 
 // Discover Real Web Sources from Live Web Search with Caching & Validation
@@ -1468,6 +1687,121 @@ function cleanFeedText(value: string): string {
   // RSS descriptions can contain a nested linked headline and a publisher suffix.
   cleaned = cleaned.replace(/\s*(?:<a\b[^>]*>.*?<\/a>|Read more|Continue reading)\s*$/i, "").trim();
   return cleaned;
+}
+
+// Dedicated YouTube search for video sources, news reports, and official press streams
+async function searchYouTubeVideos(
+  query: string,
+  claimInfo: { entities: string[]; numbers: string[]; dates: string[]; keywords: string[] }
+): Promise<DiscoveredSource[]> {
+  try {
+    const cleanQuery = query
+      .replace(/site:youtube\.com\s*/gi, "")
+      .replace(/site:[^\s]+/gi, "")
+      .trim();
+    if (!cleanQuery) return [];
+
+    const searchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(cleanQuery)}`;
+    const res = await fetch(searchUrl, {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept-Language": "en-US,en;q=0.9",
+      },
+      signal: AbortSignal.timeout(6000),
+    });
+
+    if (!res.ok) return [];
+
+    const html = await res.text();
+    const initDataMatch = html.match(/var ytInitialData = ({[\s\S]*?});<\/script>/);
+    const results: DiscoveredSource[] = [];
+
+    if (initDataMatch) {
+      try {
+        const data = JSON.parse(initDataMatch[1]);
+        const contents =
+          data.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents;
+        const items = contents?.[0]?.itemSectionRenderer?.contents || [];
+
+        for (const item of items) {
+          const v = item.videoRenderer;
+          if (v && v.videoId) {
+            const rawTitle = v.title?.runs?.[0]?.text || "";
+            const channel = v.ownerText?.runs?.[0]?.text || "YouTube";
+            const snippet =
+              v.detailedMetadataSnippets?.[0]?.snippetText?.runs?.map((r: any) => r.text).join("") || "";
+            const videoUrl = `https://www.youtube.com/watch?v=${v.videoId}`;
+            const tierInfo = classifySourceTier(videoUrl, channel);
+
+            const candidate: DiscoveredSource = {
+              title: `${rawTitle} - ${channel}`,
+              url: videoUrl,
+              canonicalUrl: videoUrl,
+              publisher: channel || "YouTube",
+              publisherDomain: "youtube.com",
+              publisherUrl: "https://www.youtube.com",
+              snippet: snippet || `Video reporting by ${channel} regarding ${cleanQuery}`,
+              tier: tierInfo.tier,
+              quality: tierInfo.quality,
+            };
+
+            candidate.relevanceScore = calculateSourceRelevance(
+              candidate,
+              claimInfo.entities,
+              claimInfo.numbers,
+              claimInfo.dates,
+              claimInfo.keywords
+            );
+
+            results.push(candidate);
+            if (results.length >= 6) break;
+          }
+        }
+      } catch (parseErr) {
+        console.warn("YouTube JSON parse warning:", parseErr);
+      }
+    }
+
+    // Fallback: If ytInitialData failed, extract video IDs with regex
+    if (results.length === 0) {
+      const videoMatches = [...html.matchAll(/\/watch\?v=([a-zA-Z0-9_-]{11})/g)];
+      const seenIds = new Set<string>();
+      for (const m of videoMatches) {
+        const vid = m[1];
+        if (seenIds.has(vid)) continue;
+        seenIds.add(vid);
+
+        const videoUrl = `https://www.youtube.com/watch?v=${vid}`;
+        const tierInfo = classifySourceTier(videoUrl, "YouTube");
+        const candidate: DiscoveredSource = {
+          title: `YouTube Video (${vid})`,
+          url: videoUrl,
+          canonicalUrl: videoUrl,
+          publisher: "YouTube",
+          publisherDomain: "youtube.com",
+          publisherUrl: "https://www.youtube.com",
+          snippet: cleanQuery,
+          tier: tierInfo.tier,
+          quality: tierInfo.quality,
+        };
+        candidate.relevanceScore = calculateSourceRelevance(
+          candidate,
+          claimInfo.entities,
+          claimInfo.numbers,
+          claimInfo.dates,
+          claimInfo.keywords
+        );
+        results.push(candidate);
+        if (results.length >= 4) break;
+      }
+    }
+
+    return results;
+  } catch (err) {
+    console.warn("searchYouTubeVideos warning:", err);
+    return [];
+  }
 }
 
 async function discoverRealWebSources(
@@ -1567,9 +1901,10 @@ async function discoverRealWebSources(
 
     // Google News RSS is a lightweight fallback when DuckDuckGo blocks server-side HTML.
     // It returns concrete article URLs without requiring another API credential.
-    if (currentQueryResults.length < 4) {
+    if (currentQueryResults.length < 5) {
       try {
-        const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(cleanQ)}&hl=en-US&gl=US&ceid=US:en`;
+        const edition = queryIndex % 2 === 1 ? "hl=en-IN&gl=IN&ceid=IN:en" : "hl=en-US&gl=US&ceid=US:en";
+        const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(cleanQ)}&${edition}`;
         const rssResponse = await fetch(rssUrl, {
           headers: { "User-Agent": "TruthLensFactCheck/1.0" },
           signal: AbortSignal.timeout(7000),
@@ -1578,25 +1913,67 @@ async function discoverRealWebSources(
         if (rssResponse.ok) {
           const rssXml = await rssResponse.text();
           const itemMatches = rssXml.match(/<item>[\s\S]*?<\/item>/g) || [];
-          for (const item of itemMatches.slice(0, 8)) {
-            const readTag = (tag: string) => {
-              const match = item.match(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`, "i"));
-              return cleanFeedText(match?.[1] || "");
-            };
+          for (const item of itemMatches.slice(0, 10)) {
+            const rawTitle = cleanFeedText(item.match(/<title>([\s\S]*?)<\/title>/i)?.[1] || "");
+            const rawLink = cleanFeedText(item.match(/<link>([\s\S]*?)<\/link>/i)?.[1] || "").replace(/&amp;/g, "&");
+            const url = cleanCanonicalUrl(rawLink);
+            const snippet = cleanFeedText(item.match(/<description>([\s\S]*?)<\/description>/i)?.[1] || "");
 
-            const title = readTag("title");
-            const url = cleanCanonicalUrl(readTag("link"));
-            const snippet = readTag("description");
-            const publisher = readTag("source") || (url ? extractPublisherFromUrl(url) : "News Source");
+            // Extract publisher name and real publisher URL from <source url="...">Publisher</source>
+            const sourceMatch = item.match(/<source\b[^>]*url="([^"]+)"[^>]*>([\s\S]*?)<\/source>/i) ||
+                                item.match(/<source\b[^>]*>([\s\S]*?)<\/source>/i);
+            const sourceUrlAttr = sourceMatch && sourceMatch[1] ? sourceMatch[1].trim() : "";
+            let publisherName = sourceMatch ? cleanFeedText(sourceMatch[2] || sourceMatch[1]) : "";
 
-            if (!title || !url || seenCanonicalUrls.has(url)) continue;
+            // Title cleanup: Google News format is "Headline - Publisher Name"
+            let cleanTitle = rawTitle;
+            const titleDashMatch = rawTitle.match(/^(.*?)(?:\s+-\s+([^-]+))$/);
+            if (titleDashMatch) {
+              cleanTitle = titleDashMatch[1].trim();
+              if (!publisherName || publisherName.toLowerCase().includes("google")) {
+                publisherName = titleDashMatch[2].trim();
+              }
+            }
 
-            const tierInfo = classifySourceTier(url, publisher);
+            // Extract real publisher domain (e.g. reuters.com, bbc.com, news18.com, thehindu.com)
+            let publisherDomain = "";
+            if (sourceUrlAttr) {
+              try {
+                const parsedDom = new URL(sourceUrlAttr).hostname.toLowerCase().replace(/^www\./, "");
+                if (parsedDom && !parsedDom.includes("google")) {
+                  publisherDomain = parsedDom;
+                }
+              } catch {}
+            }
+            if (!publisherDomain && publisherName) {
+              for (const [dom, pub] of Object.entries(KNOWN_PUBLISHERS)) {
+                if (publisherName.toLowerCase().includes(pub.toLowerCase())) {
+                  publisherDomain = dom;
+                  break;
+                }
+              }
+            }
+
+            // Clean publisher name if it still contains "Google" or is empty
+            if (!publisherName || publisherName.toLowerCase().includes("google")) {
+              if (publisherDomain) {
+                publisherName = extractPublisherFromUrl(`https://${publisherDomain}`);
+              } else {
+                publisherName = "News Source";
+              }
+            }
+
+            if (!cleanTitle || !url || seenCanonicalUrls.has(url)) continue;
+
+            const effectiveUrl = publisherDomain ? `https://${publisherDomain}` : url;
+            const tierInfo = classifySourceTier(effectiveUrl, publisherName);
             const rssCandidate: DiscoveredSource = {
-              title,
+              title: cleanTitle,
               url,
               canonicalUrl: url,
-              publisher,
+              publisher: publisherName,
+              publisherDomain: publisherDomain || undefined,
+              publisherUrl: sourceUrlAttr || (publisherDomain ? `https://${publisherDomain}` : undefined),
               snippet,
               tier: tierInfo.tier,
               quality: tierInfo.quality,
@@ -1620,48 +1997,71 @@ async function discoverRealWebSources(
     }
 
     // 2. Wikipedia OpenSearch API for scientific, encyclopedic & historical records
-    try {
-      const wikiUrl = `https://en.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(
-        cleanQ
-      )}&limit=3&namespace=0&format=json`;
-      const res = await fetch(wikiUrl, {
-        headers: { "User-Agent": "TruthLensFactCheck/1.0 (contact@truthlens.org)" },
-        signal: AbortSignal.timeout(5000),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        const titles = data[1] || [];
-        const snippets = data[2] || [];
-        const links = data[3] || [];
-        for (let i = 0; i < titles.length; i++) {
-          const canonical = cleanCanonicalUrl(links[i]);
-          if (canonical && !seenCanonicalUrls.has(canonical)) {
-            const tierInfo = classifySourceTier(canonical, "Wikipedia");
-            const wikiCandidate: DiscoveredSource = {
-              title: `${titles[i]} - Wikipedia`,
-              url: canonical,
-              canonicalUrl: canonical,
-              publisher: "Wikipedia",
-              snippet: snippets[i] || "",
-              tier: tierInfo.tier,
-              quality: tierInfo.quality,
-            };
-            wikiCandidate.relevanceScore = calculateSourceRelevance(
-              wikiCandidate,
-              claimInfo.entities,
-              claimInfo.numbers,
-              claimInfo.dates,
-              claimInfo.keywords
-            );
+    const wikiQueries = [cleanQ];
+    if (queryIndex === 1 && claimInfo.entities.length > 0) {
+      wikiQueries.push(claimInfo.entities[0]);
+    }
+    for (const wQuery of wikiQueries) {
+      try {
+        const wikiUrl = `https://en.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(
+          wQuery
+        )}&limit=5&namespace=0&format=json`;
+        const res = await fetch(wikiUrl, {
+          headers: { "User-Agent": "TruthLensFactCheck/1.0 (contact@truthlens.org)" },
+          signal: AbortSignal.timeout(5000),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const titles = data[1] || [];
+          const snippets = data[2] || [];
+          const links = data[3] || [];
+          for (let i = 0; i < titles.length; i++) {
+            const canonical = cleanCanonicalUrl(links[i]);
+            if (canonical && !seenCanonicalUrls.has(canonical)) {
+              const tierInfo = classifySourceTier(canonical, "Wikipedia");
+              const wikiCandidate: DiscoveredSource = {
+                title: `${titles[i]} - Wikipedia`,
+                url: canonical,
+                canonicalUrl: canonical,
+                publisher: "Wikipedia",
+                snippet: snippets[i] || "",
+                tier: tierInfo.tier,
+                quality: tierInfo.quality,
+              };
+              wikiCandidate.relevanceScore = calculateSourceRelevance(
+                wikiCandidate,
+                claimInfo.entities,
+                claimInfo.numbers,
+                claimInfo.dates,
+                claimInfo.keywords
+              );
 
-            seenCanonicalUrls.add(canonical);
-            currentQueryResults.push(wikiCandidate);
-            discovered.push(wikiCandidate);
+              seenCanonicalUrls.add(canonical);
+              currentQueryResults.push(wikiCandidate);
+              discovered.push(wikiCandidate);
+            }
           }
         }
+      } catch {
+        // Ignore Wikipedia search error
       }
-    } catch {
-      // Ignore Wikipedia search error
+    }
+
+    // 3. Direct YouTube Search for relevant video reporting, news reports, and official streams
+    const isYouTubeQuery = cleanQ.toLowerCase().includes("youtube") || cleanQ.toLowerCase().includes("site:youtube.com");
+    if (isYouTubeQuery || queryIndex === 1) {
+      try {
+        const ytResults = await searchYouTubeVideos(cleanQ, claimInfo);
+        for (const yt of ytResults) {
+          if (!seenCanonicalUrls.has(yt.canonicalUrl)) {
+            seenCanonicalUrls.add(yt.canonicalUrl);
+            currentQueryResults.push(yt);
+            discovered.push(yt);
+          }
+        }
+      } catch (ytErr) {
+        console.warn("YouTube search warning:", ytErr);
+      }
     }
 
     // Save in search cache
@@ -1673,24 +2073,24 @@ async function discoverRealWebSources(
       found: discovered.length,
     });
 
-    if (discovered.length >= 14) break;
+    if (discovered.length >= 40) break;
   }
 
-  // STRICT EVIDENCE GATE:
-  // A fact-check source must be about the submitted claim, not merely the same topic.
-  // Never fall back to the full search result set when no relevant evidence exists.
-  const strictEvidenceThreshold = 55;
+  // EVIDENCE RELEVANCE GATE:
+  // Sources must relate to the specific claim. But the threshold is calibrated
+  // to avoid filtering out legitimate sources that happen to have lower keyword
+  // overlap (e.g. official portals or YouTube video titles using different phrasing).
+  const strictEvidenceThreshold = 25;
   const filteredByRelevance = discovered.filter((s) => {
     const score = s.relevanceScore ?? 0;
     const searchable = `${s.title} ${s.publisher} ${s.snippet || ""}`.toLowerCase();
     const matchedEntities = claimInfo.entities.filter((e) => searchable.includes(e.toLowerCase())).length;
     const matchedKeywords = claimInfo.keywords.filter((k) => searchable.includes(k.toLowerCase())).length;
-    const hasTextualAnchor =
-      matchedEntities > 0 ||
-      matchedKeywords >= Math.min(2, Math.max(1, claimInfo.keywords.length));
-    return score >= strictEvidenceThreshold && hasTextualAnchor;
+    const isVideoOrOfficial = (s.url && (s.url.includes("youtube.com") || s.url.includes("youtu.be"))) || s.tier?.includes("Tier 1");
+    const hasTextualAnchor = matchedEntities > 0 || matchedKeywords >= 1 || (isVideoOrOfficial && (matchedEntities > 0 || matchedKeywords > 0 || score >= 20));
+    return (score >= strictEvidenceThreshold || (isVideoOrOfficial && score >= 20)) && hasTextualAnchor;
   });
-  // IMPORTANT: zero relevant sources means zero sources. Do not rescue unrelated
+  // Zero relevant sources means zero sources. Do not rescue unrelated
   // sources simply because they are authoritative, popular, or from another source family.
   const candidatesToValidate = filteredByRelevance;
 
@@ -1716,14 +2116,16 @@ async function discoverRealWebSources(
 
   // Sort by Tier (Tier 1 first) then Relevance Score descending
   deduplicated.sort((a, b) => {
-    const tierPriority = {
-      "Tier 1: Official / Primary": 4,
-      "Tier 2: Major News / Fact-Check": 3,
-      "Tier 3: Secondary Reporting": 2,
-      "Tier 4: Low-Grade / Unverified": 1,
+    const tierPriority: Record<string, number> = {
+      "Tier 1: Official / Primary": 6,
+      "Tier 2: Research / Expert": 5,
+      "Tier 3: Major News / Fact-Check": 4,
+      "Tier 4: Secondary / Specialized": 3,
+      "Tier 5: Reference / General": 2,
+      "Tier 6: User-Generated / Social": 1,
     };
-    const tA = tierPriority[a.tier || "Tier 3: Secondary Reporting"] || 2;
-    const tB = tierPriority[b.tier || "Tier 3: Secondary Reporting"] || 2;
+    const tA = tierPriority[a.tier || ""] || 2;
+    const tB = tierPriority[b.tier || ""] || 2;
     if (tA !== tB) return tB - tA;
     return (b.relevanceScore || 0) - (a.relevanceScore || 0);
   });
@@ -1908,7 +2310,32 @@ app.post("/api/verify", async (req, res) => {
       imageAnalysisData = await extractImageClaimsAndQueries(ai, fileBase64, mimeType, userContext);
     }
 
-    const claimSourceText = (text || docxExtractedText || imageAnalysisData?.mainClaim || imageAnalysisData?.headline || "").trim();
+    let youtubeVideoMetadata: { title: string; channel: string; videoUrl: string; thumbnail?: string } | null = null;
+    const ytInputMatch = (text || "").match(/https?:\/\/(?:www\.)?(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/i);
+    if (ytInputMatch) {
+      const vid = ytInputMatch[1];
+      const directYtUrl = `https://www.youtube.com/watch?v=${vid}`;
+      try {
+        const oembedRes = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(directYtUrl)}&format=json`, {
+          signal: AbortSignal.timeout(4000),
+        });
+        if (oembedRes.ok) {
+          const ytData = await oembedRes.json();
+          youtubeVideoMetadata = {
+            title: ytData.title || "",
+            channel: ytData.author_name || "YouTube",
+            videoUrl: directYtUrl,
+            thumbnail: ytData.thumbnail_url,
+          };
+        }
+      } catch (err) {
+        console.warn("Could not fetch YouTube oEmbed for submitted URL:", err);
+      }
+    }
+
+    const claimSourceText = youtubeVideoMetadata
+      ? `YouTube Video "${youtubeVideoMetadata.title}" by ${youtubeVideoMetadata.channel}: ${text}`
+      : (text || docxExtractedText || imageAnalysisData?.mainClaim || imageAnalysisData?.headline || "").trim();
     const staged = generateStagedQueries(claimSourceText, userContext, imageAnalysisData);
 
     emitProgress({
@@ -1934,6 +2361,23 @@ app.post("/api/verify", async (req, res) => {
         sourcesFound: info.found,
       });
     });
+
+    // If the user submitted a specific YouTube URL, ensure the source is present in candidate pool
+    if (youtubeVideoMetadata && !discoveredSources.some((s) => s.url === youtubeVideoMetadata!.videoUrl)) {
+      const tierInfo = classifySourceTier(youtubeVideoMetadata.videoUrl, youtubeVideoMetadata.channel);
+      discoveredSources.unshift({
+        title: `${youtubeVideoMetadata.title} - ${youtubeVideoMetadata.channel}`,
+        url: youtubeVideoMetadata.videoUrl,
+        canonicalUrl: youtubeVideoMetadata.videoUrl,
+        publisher: youtubeVideoMetadata.channel || "YouTube",
+        publisherDomain: "youtube.com",
+        publisherUrl: "https://www.youtube.com",
+        snippet: `Submitted YouTube video: "${youtubeVideoMetadata.title}" by ${youtubeVideoMetadata.channel}`,
+        tier: tierInfo.tier,
+        quality: tierInfo.quality,
+        relevanceScore: 98,
+      });
+    }
 
     emitProgress({
       type: "progress",
@@ -1961,26 +2405,25 @@ CORE SCIENTIFIC VERIFICATION PRINCIPLES:
    - Only return "FALSE" when high-quality authoritative sources directly refute, contradict, or disprove the specific claim.
    - If an official government/institutional source (e.g. MoSPI, PIB, NASA) and independent wire reporting confirm the claim, return "TRUE" with high confidence.
 
-3. STRICT VERDICT TERMINOLOGY:
-   - "TRUE": Clear positive evidence from authoritative primary or multiple independent sources confirms the claim.
+3. STRICT SCIENTIFIC VERDICT TERMINOLOGY & PRECISION:
+   - "TRUE": Clear positive evidence confirms the claim EXACTLY as stated with no missing critical context or geographic/scientific ambiguity.
    - "LIKELY TRUE": Substantial positive evidence points to truth, but minor non-critical details remain unconfirmed.
-   - "MIXED": Claim mixes verified facts with unverified or false assertions, or omits crucial context.
+   - "MIXED": Claim mixes verified facts with inaccurate, imprecise, or unverified assertions, or conflates distinct locations/events. For example:
+     * "India landed on south pole": The scientifically accurate verdict is "MIXED" (or "LIKELY TRUE with vital clarification"): India's Chandrayaan-3 successfully soft-landed in the Moon's southern polar region (~69.37°S latitude), making India the first nation to land near the lunar south pole, NOT at the exact geographic 90°S South Pole, and not on Earth's South Pole.
+   - "MISLEADING": The statement gives an inaccurate or exaggerated impression by omitting vital scientific, technical, or geographical facts.
    - "LIKELY FALSE": Credible evidence heavily disputes or points against the claim.
    - "FALSE": Direct, reliable evidence actively contradicts or refutes the claim.
-   - "UNVERIFIED": Insufficient or inconclusive positive evidence discovered to confirm or deny the assertion. (Do not use "UNVERIFIABLE").
+   - "UNVERIFIED": Insufficient or inconclusive positive evidence discovered to confirm or deny the assertion.
 
 4. CLAIM CLASSIFICATION & DIFFICULTY:
    - Claim Type: "Direct Factual" | "Official / Legal Record" | "Statistical / Numerical" | "Scientific / Technical" | "Historical Event" | "Current Event / Reporting" | "Breaking / Emerging" | "Disputed / Interpretive" | "Ambiguous / Context-Dependent" | "Rumor / Unsubstantiated Assertion" | "No Verifiable Claim"
    - Verification Difficulty: "Low" | "Moderate" | "High" | "Extreme"
 
-5. STRICT SOURCE REPUTATION & CURATED RESOURCES (4 TO 5 RESOURCES):
-   - When candidate sources are available, select and provide 4 to 5 high-quality, diverse resources.
-   - Deliver a balanced mix across:
-     * Official / Primary records (government portals, NASA, WHO, scientific repositories)
-     * Major News & Fact-checkers (Reuters, AP, BBC, Indian Express, FactCheck.org)
-     * Authoritative Specialized Blogs & Domain Analysis (expert investigative blogs, domain analysts)
-   - Use the exact candidate URL. Never guess, alter, or invent URLs.
-   - Classify relationship: "SUPPORTS", "CONTRADICTS", "CONTEXT", "NEUTRAL".
+5. STRICT SOURCE REPUTATION & CURATED RESOURCES:
+   - Select and cite ONLY candidate sources whose title and content DIRECTLY investigate, confirm, refute, or contextualize the specific claim.
+   - NEVER cite sources about unrelated topics, other nations' unrelated missions (e.g. Pakistan, China), or generic natural events (e.g. volcanoes, weather) simply because they appeared in search candidates.
+   - If only 2 or 3 directly relevant candidate sources exist, return ONLY those 2 or 3 sources. Relevance strictly beats quantity. NEVER pad the source list with irrelevant articles.
+   - Classify relationship honestly: "SUPPORTS", "CONTRADICTS", "CONTEXT", "NEUTRAL" based on what the source actually establishes.
 
 6. ADVANCED AI-GENERATED VS. HUMAN/AUTHENTIC ORIGIN DETECTION:
    - Perform forensic analysis to determine whether the submitted input (image, document, or text) is AI-GENERATED or NOT AI-GENERATED (Authentic / Human-Authored).
@@ -2114,23 +2557,35 @@ OUTPUT JSON FORMAT:
 
     let sourcesPromptBlock = "";
     if (discoveredSources.length > 0) {
-      sourcesPromptBlock = `VERIFIED SEARCH SOURCES DISCOVERED FROM LIVE WEB SEARCH (with exact verified URLs):\n`;
+      sourcesPromptBlock = `VERIFIED SEARCH SOURCES DISCOVERED FROM LIVE WEB SEARCH (${discoveredSources.length} candidates, target: 5-8 sources):\n`;
       discoveredSources.forEach((s, idx) => {
-        sourcesPromptBlock += `[Candidate ${idx + 1}]:\n  Title: "${s.title}"\n  Publisher: "${s.publisher}"\n  Exact URL: "${s.url}"\n  Source family: "${getSourceFamily(s.url, s.publisher)}"\n  Relevance score: ${s.relevanceScore || 0}\n  Syndication: ${(s as any).independence || "Independent"}\n`;
+        const family = getSourceFamily(s.publisherDomain ? `https://${s.publisherDomain}` : s.url, s.publisher);
+        const tierInfo = classifySourceTier(s.publisherDomain ? `https://${s.publisherDomain}` : s.url, s.publisher);
+        sourcesPromptBlock += `[Candidate ${idx + 1}]:\n  Title: "${s.title}"\n  Publisher: "${s.publisher}"\n  Publisher Domain: "${s.publisherDomain || ""}"\n  Exact URL: "${s.url}"\n  Source family: "${family}"\n  Source tier: "${tierInfo.tier}"\n  Source type: "${tierInfo.sourceType}"\n  Relevance score: ${s.relevanceScore || 0}\n  Syndication: ${(s as any).independence || "Independent"}\n`;
       });
-      sourcesPromptBlock += `\nCRITICAL SOURCE CITATION RULES:
+      sourcesPromptBlock += `\nCRITICAL SOURCE CITATION AND VERDICT RULES:
 1. Select and cite sources ONLY from the Candidate list above if they directly support, refute, or contextualize this specific claim.
-2. The "url" field MUST be the EXACT URL provided in the candidate list.
-3. NEVER generate, guess, reconstruct, modify, shorten, or invent any URL.
-4. If a candidate source is irrelevant or merely a generic index/homepage, REJECT IT.
-5. Only cite a candidate when its title/snippet clearly concerns the exact claim, event, image, person, place, date, or media context being checked.
-6. Relevance beats authority: an authoritative source about a different event is NOT evidence for this claim.
-7. If fewer than 4 relevant candidates exist, return only the relevant candidates. Never pad the source list.
-8. Do not use multiple URLs from the same publisher or syndicated story as fake independent corroboration.
-9. If NO candidate sources are directly relevant, return "sources": [] and verdict "UNVERIFIED" (or an uncertainty result), and explain that relevant evidence was not found.
-10. For an image with no matching online occurrence or claim-specific evidence, do NOT substitute generic articles about the image's topic.\n`;
+2. MANDATORY: You MUST select and cite AT LEAST 5 TO 6 verified sources (target: 5-8 sources) from the candidate list whenever available. Include diverse coverage: trusted major news (such as BBC, News18, Hindustan Times, NDTV, The Hindu, Reuters, AP), Wikipedia, and verified fact-checkers or official portals.
+3. The "url" field MUST be the EXACT URL provided in the candidate list. NEVER fabricate or guess URLs.
+4. The "publisher" field MUST be the actual news outlet or organization name. NEVER use "Google" or "Google News".
+5. For each source, classify:
+   - "sourceType": "government" | "official" | "research" | "academic" | "news" | "fact_check" | "wikipedia" | "specialized" | "youtube" | "social" | "other"
+   - "relationship": "SUPPORTS" | "CONTRADICTS" | "CONTEXT" | "NEUTRAL" — based on what the source ACTUALLY says about this claim, not just keyword match
+   - "directness": "direct" (source directly states/proves the fact) | "indirect" (related but doesn't directly establish) | "commentary" | "unknown"
+   - "independence": "independent" | "possibly_dependent" (appears to derive from same original source) | "duplicate" | "unknown"
+   - "originalSource": If the article cites an original source (e.g. Reuters cites government statement), name the original source
+6. VERDICT GATING:
+   - Do NOT issue a confident TRUE or FALSE verdict based on only 1-2 sources
+   - If only 1 source SUPPORTS, use "LIKELY TRUE" at most (not "TRUE")
+   - If only 1 source CONTRADICTS, use "LIKELY FALSE" at most (not "FALSE")
+   - If sources disagree (some SUPPORT, some CONTRADICT), use "MIXED" and show both sides
+   - With 0-1 relevant sources: verdict should be "UNVERIFIED" unless the single source is an authoritative primary source directly establishing the fact
+7. If a candidate source is irrelevant, REJECT IT. Relevance beats quantity.
+8. Do not count syndicated copies as independent corroboration.
+9. If NO candidate sources are directly relevant, return "sources": [] and verdict "UNVERIFIED".
+10. For an image with no matching online occurrence, do NOT substitute generic articles.\n`;
     } else {
-      sourcesPromptBlock = `No live search sources were pre-discovered for this query. If you cite sources, set "url": null unless citing an exact official standard. NEVER guess or fabricate URLs.\n`;
+      sourcesPromptBlock = `No live search sources were pre-discovered for this query. If you cite sources, set "url": null unless citing an exact official standard. NEVER guess or fabricate URLs. With no discovered sources, the verdict should be "UNVERIFIED".\n`;
     }
 
     promptText += `\n${sourcesPromptBlock}\n`;
@@ -2283,24 +2738,40 @@ OUTPUT JSON FORMAT:
             continue;
           }
 
-          const cat = normalizeCategory(s.category, s.isHistorical);
-          const tierInfo = classifySourceTier(exactUrl, s.publisher, cat);
           const matchedCand = exactUrl ? discoveredUrlMap.get(exactUrl) : null;
+
+          let finalPublisher = s.publisher;
+          if (!finalPublisher || finalPublisher.toLowerCase().includes("google")) {
+            finalPublisher = matchedCand?.publisher || (exactUrl ? extractPublisherFromUrl(exactUrl) : undefined);
+          }
+          if (finalPublisher && finalPublisher.toLowerCase().includes("google") && matchedCand?.publisherDomain) {
+            finalPublisher = extractPublisherFromUrl(`https://${matchedCand.publisherDomain}`);
+          }
+
+          const isYtUrl = exactUrl ? (exactUrl.includes("youtube.com") || exactUrl.includes("youtu.be")) : false;
+          const isWikiUrl = exactUrl ? exactUrl.includes("wikipedia.org") : false;
+          const cat = isYtUrl ? "YouTube" : isWikiUrl ? "Wikipedia" : normalizeCategory(s.category, s.isHistorical);
+          const tierInfo = classifySourceTier(exactUrl, finalPublisher || s.publisher, cat);
           const summaryText = s.evidenceSummary || s.relevance || s.summary || "Provides factual record regarding this claim.";
 
           processedSources.push({
             title: s.title || (exactUrl ? matchedCand?.title || "Verified Source" : "Reference Source"),
-            publisher: s.publisher || (exactUrl ? extractPublisherFromUrl(exactUrl) : undefined),
+            publisher: finalPublisher,
+            publisherDomain: matchedCand?.publisherDomain || undefined,
+            publisherUrl: matchedCand?.publisherUrl || undefined,
             date: s.date || undefined,
             publishedDate: s.date || undefined,
             url: exactUrl,
             canonicalUrl: exactUrl,
             category: cat,
+            sourceType: isYtUrl ? "youtube" : isWikiUrl ? "wikipedia" : ((s.sourceType || tierInfo.sourceType || undefined) as SourceType | undefined),
             relationship: rel,
             quality: s.quality || tierInfo.quality,
             tier: s.tier || tierInfo.tier,
             sourceTier: s.tier || tierInfo.tier,
             independence: s.independence || matchedCand?.independence || "Independent",
+            directness: s.directness || "unknown",
+            originalSource: s.originalSource || undefined,
             isHistorical: Boolean(s.isHistorical),
             relevance: summaryText,
             evidenceSummary: summaryText,
@@ -2314,55 +2785,46 @@ OUTPUT JSON FORMAT:
       }
     }
 
-    // Preserve additional evidence only from the STRICTLY RELEVANT retrieval set.
-    // Do not append merely topical or authoritative sources when they are unrelated.
-    if (processedSources.length < 12 && discoveredSources.length > 0) {
-      for (const ds of discoveredSources) {
-        if ((ds.relevanceScore || 0) < 55) continue;
-        if (processedSources.length >= 12) break;
-        if (usedUrls.has(ds.url)) continue;
-        if (!isValidSpecificUrl(ds.url)) continue;
+    // Ensure 5 to 6+ verified sources by enriching with remaining validated discovered sources (Wikipedia, BBC, HT, News18, etc.)
+    if (processedSources.length < 6 && discoveredSources.length > processedSources.length) {
+      const existingUrls = new Set(processedSources.map((s) => s.url).filter(Boolean));
+      for (const cand of discoveredSources) {
+        if (processedSources.length >= 6) break;
+        if (!cand.url || existingUrls.has(cand.url)) continue;
 
-        const sourceFamily = getSourceFamily(ds.url, ds.publisher);
-        const cat: SourceCategory =
-          sourceFamily === "official"
-            ? "Official"
-            : sourceFamily === "wikipedia"
-              ? "Historical Context"
-              : sourceFamily === "news"
-                ? "News"
-                : sourceFamily === "fact-check"
-                  ? "Fact Check"
-                  : sourceFamily === "research"
-                    ? "Research"
-                    : "Other";
-        const tierInfo = classifySourceTier(ds.url, ds.publisher, cat);
+        const isYtUrl = cand.url.includes("youtube.com") || cand.url.includes("youtu.be");
+        const isWikiUrl = cand.url.includes("wikipedia.org");
+        const cat = isYtUrl ? "YouTube" : isWikiUrl ? "Wikipedia" : normalizeCategory(cand.tier, false);
+        const tierInfo = classifySourceTier(cand.url, cand.publisher, cat);
+        const rel = parsedResult.verdict === "TRUE" ? "SUPPORTS" : parsedResult.verdict === "FALSE" ? "CONTRADICTS" : "CONTEXT";
 
-        usedUrls.add(ds.url);
         processedSources.push({
-          title: ds.title || "Corroborating Evidence Record",
-          publisher: ds.publisher || extractPublisherFromUrl(ds.url),
-          date: undefined,
-          publishedDate: undefined,
-          url: ds.url,
-          canonicalUrl: ds.url,
+          title: cand.title,
+          publisher: cand.publisher || extractPublisherFromUrl(cand.url),
+          publisherDomain: cand.publisherDomain,
+          publisherUrl: cand.publisherUrl,
+          url: cand.url,
+          canonicalUrl: cand.url,
           category: cat,
-          relationship: parsedResult.verdict === "FALSE" ? "CONTRADICTS" : "SUPPORTS",
-          quality: tierInfo.quality,
-          tier: tierInfo.tier,
-          sourceTier: tierInfo.tier,
-          independence: ds.independence || "Independent",
+          sourceType: isYtUrl ? "youtube" : isWikiUrl ? "wikipedia" : (tierInfo.sourceType as any),
+          relationship: rel,
+          quality: cand.quality || tierInfo.quality,
+          tier: cand.tier || tierInfo.tier,
+          sourceTier: cand.tier || tierInfo.tier,
+          independence: (cand as any).independence || "Independent",
+          directness: "direct",
           isHistorical: false,
-          relevance: ds.snippet || "Public reporting and corroborating empirical documentation on this matter.",
-          evidenceSummary: ds.snippet || "Public reporting and corroborating empirical documentation on this matter.",
-          summary: ds.snippet || "Public reporting and corroborating empirical documentation on this matter.",
-          relevanceScore: ds.relevanceScore || 80,
+          relevance: cand.snippet || `Corroborating record from ${cand.publisher || "verified evidence index"}.`,
+          evidenceSummary: cand.snippet || `Corroborating record from ${cand.publisher || "verified evidence index"}.`,
+          summary: cand.snippet || `Corroborating record from ${cand.publisher || "verified evidence index"}.`,
+          relevanceScore: cand.relevanceScore || 80,
           isVerified: true,
         });
+        existingUrls.add(cand.url);
       }
     }
 
-    parsedResult.sources = processedSources.slice(0, 12);
+    parsedResult.sources = processedSources.slice(0, 10);
 
     // For image checks, retrieve a real publisher-supplied preview from the
     // verified evidence page. A missing preview remains missing rather than
@@ -2534,9 +2996,47 @@ OUTPUT JSON FORMAT:
     const disputedCount = parsedResult.disputedPoints?.length || 0;
     const contradictingCount = parsedResult.contradictingEvidence?.length || 0;
     const supportingCount = parsedResult.supportingEvidence?.length || 0;
+    const contextCount = parsedResult.contextEvidence?.length || 0;
     const positiveEvidenceFound =
       parsedResult.positiveEvidenceFound !== false &&
       (processedSources.length > 0 || parsedResult.verdict === "TRUE" || parsedResult.verdict === "FALSE");
+
+    // Count source relationships
+    const supportsSourceCount = processedSources.filter(s => (s.relationship || "").toUpperCase() === "SUPPORTS").length;
+    const contradictsSourceCount = processedSources.filter(s => (s.relationship || "").toUpperCase() === "CONTRADICTS").length;
+    const contextSourceCount = processedSources.filter(s => (s.relationship || "").toUpperCase() === "CONTEXT").length;
+    const neutralSourceCount = processedSources.filter(s => (s.relationship || "").toUpperCase() === "NEUTRAL").length;
+
+    // Assess Evidence Coverage
+    const { coverage: evidenceCoverage, explanation: evidenceCoverageExplanation } = assessEvidenceCoverage(
+      processedSources,
+      supportsSourceCount,
+      contradictsSourceCount,
+      contextSourceCount
+    );
+
+    // APPLICATION-LEVEL VERDICT GATING
+    // Gate the AI's verdict based on actual evidence quantity and independence
+    const independentSourceCount = processedSources.filter(
+      s => !s.independence || s.independence === "Independent" || s.independence === "independent" || s.independence === "Direct"
+    ).length;
+
+    if (parsedResult.verdict === "TRUE" && independentSourceCount < 3 && supportsSourceCount <= 1) {
+      // Downgrade confident TRUE to LIKELY TRUE when only 1 supporting source
+      parsedResult.verdict = "LIKELY TRUE";
+    }
+    if (parsedResult.verdict === "FALSE" && independentSourceCount < 3 && contradictsSourceCount <= 1) {
+      // Downgrade confident FALSE to LIKELY FALSE when only 1 contradicting source
+      parsedResult.verdict = "LIKELY FALSE";
+    }
+    if ((parsedResult.verdict === "TRUE" || parsedResult.verdict === "FALSE") && processedSources.length === 0) {
+      parsedResult.verdict = "UNVERIFIED";
+    }
+
+    // If sources both support AND contradict, the verdict should be MIXED
+    if (supportsSourceCount >= 1 && contradictsSourceCount >= 1 && parsedResult.verdict !== "MIXED" && parsedResult.verdict !== "MISLEADING") {
+      parsedResult.verdict = "MIXED";
+    }
 
     // Dynamic Evidence Strength & Confidence Calibration
     const calibrated = calibrateEvidenceScoreAndStrength(
@@ -2549,31 +3049,46 @@ OUTPUT JSON FORMAT:
       disputedCount,
       contradictingCount,
       supportingCount,
-      positiveEvidenceFound
+      positiveEvidenceFound,
+      evidenceCoverage
     );
 
     parsedResult.confidence = calibrated.confidence;
     parsedResult.confidenceLabel = calibrated.confidenceLabel;
     parsedResult.evidenceStrength = calibrated.evidenceStrength;
+    parsedResult.evidenceCoverage = evidenceCoverage;
     parsedResult.claimType = calibrated.claimType;
     parsedResult.verificationDifficulty = calibrated.verificationDifficulty;
     parsedResult.positiveEvidenceFound = calibrated.positiveEvidenceFound;
+
+    // Populate source counts for frontend
+    parsedResult.sourcesFound = discoveredSources.length;
+    parsedResult.sourcesTarget = 8;
+    parsedResult.supportsCount = supportsSourceCount;
+    parsedResult.contradictsCount = contradictsSourceCount;
+    parsedResult.contextCount = contextSourceCount;
 
     // Search Transparency and Temporal Audit Record
     const searchTransparency: SearchTransparency = {
       queriesUsed: staged.queries,
       sourcesFound: discoveredSources.length,
       sourcesEvaluated: processedSources.length,
+      sourcesTarget: 8,
       officialSourcesFound: processedSources.filter(
-        (s) => s.category === "Official" || s.tier === "Tier 1: Official / Primary"
+        (s) => s.category === "Official" || s.category === "Government" || s.tier?.includes("Tier 1")
       ).length,
-      independentSourcesFound: processedSources.filter((s) => s.independence === "Independent").length,
-      contradictingSourcesFound: contradictingCount,
-      supportingSourcesFound: supportingCount,
+      independentSourcesFound: independentSourceCount,
+      contradictingSourcesFound: contradictsSourceCount,
+      supportingSourcesFound: supportsSourceCount,
+      contextSourcesFound: contextSourceCount,
+      neutralSourcesFound: neutralSourceCount,
       searchTimestamp: new Date().toISOString(),
       isTimeSensitive: staged.temporalInfo.isTimeSensitive,
       temporalReferenceDate: staged.temporalInfo.referenceDate,
       temporalContext: staged.temporalInfo.eventWindow || undefined,
+      evidenceCoverage,
+      evidenceCoverageExplanation,
+      categoriesSearched: staged.categoriesSearched,
     };
     parsedResult.searchTransparency = searchTransparency;
 

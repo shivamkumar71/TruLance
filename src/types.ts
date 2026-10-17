@@ -9,9 +9,13 @@ export type VerdictType =
 
 export type SourceCategory =
   | "Official"
+  | "Government"
   | "News"
   | "Fact Check"
   | "Research"
+  | "Wikipedia"
+  | "Specialized"
+  | "YouTube"
   | "Historical Context"
   | "Document"
   | "Blog / Analysis"
@@ -42,6 +46,25 @@ export interface AIDetectionAssessment {
 }
 
 export type SourceRelationship = "SUPPORTS" | "CONTRADICTS" | "CONTEXT" | "NEUTRAL";
+
+export type EvidenceCoverage = "strong" | "moderate" | "limited" | "insufficient";
+
+export type SourceDirectness = "direct" | "indirect" | "commentary" | "unknown";
+
+export type SourceIndependence = "independent" | "possibly_dependent" | "duplicate" | "unknown";
+
+export type SourceType =
+  | "government"
+  | "official"
+  | "research"
+  | "academic"
+  | "news"
+  | "fact_check"
+  | "wikipedia"
+  | "specialized"
+  | "youtube"
+  | "social"
+  | "other";
 
 export type ConfidenceLevel =
   | "Very High"
@@ -77,19 +100,27 @@ export interface SearchTransparency {
   queriesUsed: string[];
   sourcesFound: number;
   sourcesEvaluated: number;
+  sourcesTarget?: number;
   officialSourcesFound: number;
   independentSourcesFound: number;
   contradictingSourcesFound: number;
   supportingSourcesFound: number;
+  contextSourcesFound?: number;
+  neutralSourcesFound?: number;
   searchTimestamp: string;
   isTimeSensitive: boolean;
   temporalReferenceDate: string;
   temporalContext?: string;
+  evidenceCoverage?: EvidenceCoverage;
+  evidenceCoverageExplanation?: string;
+  categoriesSearched?: string[];
 }
 
 export interface VerificationSource {
   title: string;
   publisher?: string;
+  publisherDomain?: string;
+  publisherUrl?: string;
   date?: string;
   publishedDate?: string;
   updatedDate?: string;
@@ -98,15 +129,18 @@ export interface VerificationSource {
   url?: string | null;
   canonicalUrl?: string | null;
   category?: SourceCategory;
+  sourceType?: SourceType;
   relationship?: SourceRelationship;
   isHistorical?: boolean;
   relevance?: string;
   evidenceSummary?: string;
   summary?: string;
   quality?: "Official" | "Peer-Reviewed" | "Major News" | "Standard" | "Archive";
-  tier?: "Tier 1: Official / Primary" | "Tier 2: Major News / Fact-Check" | "Tier 3: Secondary Reporting" | "Tier 4: Low-Grade / Unverified";
+  tier?: "Tier 1: Official / Primary" | "Tier 2: Research / Expert" | "Tier 3: Major News / Fact-Check" | "Tier 4: Secondary / Specialized" | "Tier 5: Reference / General" | "Tier 6: User-Generated / Social" | "Tier 2: Major News / Fact-Check" | "Tier 3: Secondary Reporting" | "Tier 4: Low-Grade / Unverified";
   sourceTier?: string;
-  independence?: "Independent" | "Direct" | "Syndicated";
+  independence?: "Independent" | "Direct" | "Syndicated" | "independent" | "possibly_dependent" | "duplicate" | "unknown";
+  directness?: SourceDirectness;
+  originalSource?: string;
   relevanceScore?: number;
   isVerified?: boolean;
   /** Open Graph / Twitter image found on the verified source page, when available. */
@@ -176,6 +210,7 @@ export interface VerificationResult {
   confidence: number;
   confidenceLabel?: ConfidenceLevel;
   evidenceStrength?: EvidenceStrength;
+  evidenceCoverage?: EvidenceCoverage;
   claimType?: ClaimType;
   verificationDifficulty?: VerificationDifficulty;
   positiveEvidenceFound?: boolean;
@@ -188,6 +223,11 @@ export interface VerificationResult {
   contextEvidence?: string[];
   context?: string[];
   sources: VerificationSource[];
+  sourcesFound?: number;
+  sourcesTarget?: number;
+  supportsCount?: number;
+  contradictsCount?: number;
+  contextCount?: number;
   bottomLine?: string;
   checkedFocus?: string | null;
   disputedPoints?: string[];
