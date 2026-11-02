@@ -119,7 +119,7 @@ export const CheckWorkspace: React.FC<CheckWorkspaceProps> = ({
             Verification Studio
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-xl leading-relaxed">
-            Investigate viral claims, news headlines, photos, or documents against 5-6 verified public sources in real time.
+            Investigate viral claims, website/news links, photos, or documents against 5-6 verified public sources in real time.
           </p>
         </div>
       </div>

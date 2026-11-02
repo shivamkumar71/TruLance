@@ -244,7 +244,21 @@ export interface VerificationResult {
   searchTransparency?: SearchTransparency;
   aiDetection?: AIDetectionAssessment;
   analyzedAt: string;
-  contentType?: "text" | "image" | "pdf" | "document";
+  contentType?: "text" | "image" | "pdf" | "document" | "url";
+  sourceUrlMetadata?: WebPageMetadata;
+}
+
+export interface WebPageMetadata {
+  url: string;
+  title?: string;
+  description?: string;
+  siteName?: string;
+  author?: string;
+  publishedTime?: string;
+  favicon?: string;
+  mainImage?: string;
+  extractedText?: string;
+  wordCount?: number;
 }
 
 export interface UploadedFileItem {
@@ -261,6 +275,7 @@ export interface VerifyRequestPayload {
   text?: string;
   userContext?: string;
   file?: UploadedFileItem;
+  url?: string;
 }
 
 export interface TrendingNewsItem {
@@ -299,7 +314,7 @@ export interface HistoryItem {
   verificationDifficulty?: VerificationDifficulty;
   sourcesCount: number;
   timestamp: string;
-  contentType: "text" | "image" | "pdf" | "document";
+  contentType: "text" | "image" | "pdf" | "document" | "url";
   aiDetection?: AIDetectionAssessment;
   result: VerificationResult;
 }

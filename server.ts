@@ -21,6 +21,7 @@ import {
   VerificationDifficulty,
   FactCheckRecord,
   SearchTransparency,
+  WebPageMetadata,
 } from "./src/types";
 
 dotenv.config();
@@ -604,6 +605,101 @@ function computeConfidenceLabel(score: number, verdict: VerdictType): Confidence
   if (score < 75) return "Moderate";
   if (score < 92) return "High";
   return "Very High";
+}
+
+// Fetch and Extract Web Page Content (for URL link verification)
+async function fetchAndExtractWebPage(targetUrl: string): Promise<WebPageMetadata | null> {
+  try {
+    const canonical = cleanCanonicalUrl(targetUrl);
+    if (!canonical) return null;
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 6000);
+
+    const res = await fetch(canonical, {
+      method: "GET",
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36 TruthLens/2.0",
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9,hi;q=0.8",
+      },
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+
+    if (!res.ok) return null;
+    const html = await res.text();
+    if (!html || html.length < 50) return null;
+
+    // Helper regex extractors
+    const getMeta = (propOrName: string) => {
+      const match =
+        html.match(new RegExp(`<meta[^>]+(?:property|name)=["'](?:og:)?${propOrName}["'][^>]+content=["']([^"']+)["']`, "i")) ||
+        html.match(new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["'](?:og:)?${propOrName}["']`, "i"));
+      return match ? decodeHtmlEntities(match[1].trim()) : undefined;
+    };
+
+    const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+    const rawTitle = getMeta("title") || (titleMatch ? decodeHtmlEntities(titleMatch[1].trim()) : undefined);
+    const description = getMeta("description");
+    const siteName = getMeta("site_name") || extractPublisherFromUrl(canonical);
+    const author = getMeta("author") || getMeta("article:author");
+    const publishedTime = getMeta("article:published_time") || getMeta("pubdate") || getMeta("date");
+    const mainImage = getMeta("image");
+
+    let favicon: string | undefined;
+    const iconMatch = html.match(/<link[^>]+rel=["'](?:shortcut )?icon["'][^>]+href=["']([^"']+)["']/i);
+    if (iconMatch) {
+      const iconHref = iconMatch[1].trim();
+      try {
+        favicon = new URL(iconHref, canonical).toString();
+      } catch {
+        favicon = undefined;
+      }
+    }
+    if (!favicon) {
+      try {
+        const u = new URL(canonical);
+        favicon = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(u.hostname)}&sz=64`;
+      } catch {}
+    }
+
+    // Strip scripts, styles, navigations, footers, headers
+    let bodyText = html
+      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, " ")
+      .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, " ")
+      .replace(/<noscript\b[^<]*(?:(?!<\/noscript>)<[^<]*)*<\/noscript>/gi, " ")
+      .replace(/<svg\b[^<]*(?:(?!<\/svg>)<[^<]*)*<\/svg>/gi, " ")
+      .replace(/<header\b[^<]*(?:(?!<\/header>)<[^<]*)*<\/header>/gi, " ")
+      .replace(/<footer\b[^<]*(?:(?!<\/footer>)<[^<]*)*<\/footer>/gi, " ")
+      .replace(/<nav\b[^<]*(?:(?!<\/nav>)<[^<]*)*<\/nav>/gi, " ")
+      .replace(/<aside\b[^<]*(?:(?!<\/aside>)<[^<]*)*<\/aside>/gi, " ")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    bodyText = decodeHtmlEntities(bodyText);
+    const wordCount = bodyText.split(/\s+/).filter(Boolean).length;
+    // Limit to first ~3500 words (about 18,000 characters) for optimal prompt efficiency
+    const extractedText = bodyText.slice(0, 18000);
+
+    return {
+      url: canonical,
+      title: rawTitle,
+      description,
+      siteName,
+      author,
+      publishedTime,
+      favicon,
+      mainImage,
+      extractedText,
+      wordCount,
+    };
+  } catch (err) {
+    console.warn("fetchAndExtractWebPage error for", targetUrl, err);
+    return null;
+  }
 }
 
 // Temporal Detection & Date Window Analysis
@@ -1548,18 +1644,46 @@ function detectSyndicationAndDeduplicate(sources: DiscoveredSource[]): Discovere
   return deduplicated;
 }
 
+// Clean title for search indexing by stripping publisher names, clickbait prefixes, and punctuation
+function cleanTitleForSearch(title: string): string {
+  if (!title) return "";
+  let clean = decodeHtmlEntities(title);
+  // Remove publisher branding suffixes: | NDTV, - BBC News, etc.
+  clean = clean.replace(/\s*[-|–—:]\s*(?:DNA India|NDTV(?:\.com)?|BBC(?:\s+News)?|Hindustan Times|The Hindu|India Today|Times of India|News18|Factly|BOOM(?:\s*Live)?|Alt News|Livemint|The Print|The Wire|Indian Express|Pragativadi|Reuters|AP News|CNN|CNBC|The Guardian|Washington Post|New York Times|Economic Times|ANI|Zee News|Aaj Tak|ABP News).*$/i, "");
+  // Generic branding suffix: " - Source Name" or " | Brand"
+  clean = clean.replace(/\s*[-|–—]\s*[^–—|-]{2,25}$/, "");
+  // Remove common media prefixes: "Fact Check:", "Explained:", "Watch:", "Viral Video:"
+  clean = clean.replace(/^(?:Fact Check|Fact-Check|Viral Video|Viral Claim|Breaking|Watch|Explainer|Explained|Claim|Debunked)\s*[:|-]\s*/i, "");
+  // Remove emojis
+  clean = clean.replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, " ");
+  // Remove quotes and punctuation noise
+  clean = clean.replace(/["'“”‘’]/g, " ").replace(/[?.,!]+$/, "").replace(/\s+/g, " ").trim();
+  return clean;
+}
+
 // Generate Multi-Category Search Queries with Broad Source Discovery Pipeline & Temporal Awareness
 function generateStagedQueries(
   claimText: string,
   userContext?: string,
-  imageAnalysis?: ImageExtractionResult | null
+  imageAnalysis?: ImageExtractionResult | null,
+  webPageData?: WebPageMetadata | null
 ): {
   queries: string[];
   claimInfo: { entities: string[]; numbers: string[]; dates: string[]; keywords: string[] };
   temporalInfo: TemporalInfo;
   categoriesSearched: string[];
 } {
-  const targetText = [claimText, userContext, imageAnalysis?.headline, imageAnalysis?.mainClaim]
+  const cleanWebHeadline = webPageData?.title ? cleanTitleForSearch(webPageData.title) : "";
+  const baseClaimText = cleanWebHeadline || claimText;
+
+  const targetText = [
+    cleanWebHeadline,
+    claimText,
+    userContext,
+    webPageData?.description,
+    imageAnalysis?.headline,
+    imageAnalysis?.mainClaim
+  ]
     .filter(Boolean)
     .join(" ")
     .trim();
@@ -1572,19 +1696,38 @@ function generateStagedQueries(
   const lowerTarget = targetText.toLowerCase();
   const entityStr = claimInfo.entities.slice(0, 4).join(" ");
 
-  const firstSentence = claimText.split(/[.\n]/)[0].trim().slice(0, 100);
-  const claimAnchor = (firstSentence || targetText).replace(/[?.,!]+$/, "").trim().slice(0, 90);
-  const shortAnchor = claimAnchor.slice(0, 60);
+  // Create clean, search-engine-friendly anchors
+  const firstSentence = baseClaimText.split(/[.\n]/)[0].trim().slice(0, 100);
+  const claimAnchor = cleanTitleForSearch(firstSentence || targetText).replace(/[?.,!]+$/, "").trim().slice(0, 75);
+  const shortAnchor = claimAnchor.slice(0, 50);
 
-  // ── A. EXACT CLAIM QUERY ──────────────────────────────────────────────────
-  queries.push(claimAnchor);
+  // ── A. EXACT & CLEAN CLAIM QUERY ──────────────────────────────────────────
+  if (claimAnchor) {
+    queries.push(claimAnchor);
+  }
 
-  // ── B. OFFICIAL / GOVERNMENT SOURCES ──────────────────────────────────────
+  // ── B. FACT-CHECKING SOURCES ──────────────────────────────────────────────
+  queries.push(`${shortAnchor} fact check`);
+  queries.push(`${shortAnchor} debunk OR fact check`);
+  categoriesSearched.push("fact-check");
+
+  // ── C. MAJOR TRUSTED NEWS (BBC, News18, Hindustan Times, NDTV, Reuters, etc.) ──
+  queries.push(`${shortAnchor} BBC OR News18 OR "Hindustan Times" OR NDTV OR Reuters`);
+  categoriesSearched.push("news");
+
+  // ── D. ENTITY-LEVEL NEWS & FACT CHECKS ───────────────────────────────────
+  if (claimInfo.entities.length >= 2) {
+    queries.push(`${claimInfo.entities.slice(0, 3).join(" ")} news fact check`);
+  } else if (claimInfo.entities.length === 1) {
+    queries.push(`${claimInfo.entities[0]} ${claimInfo.keywords.slice(0, 2).join(" ")} fact check`);
+  }
+
+  // ── E. OFFICIAL / GOVERNMENT SOURCES ──────────────────────────────────────
   const officialQuery = `${shortAnchor} official site:gov OR site:gov.in OR site:nic.in OR site:who.int OR site:un.org`;
   queries.push(officialQuery);
   categoriesSearched.push("official");
 
-  // ── C. DOMAIN-SPECIFIC CONTEXT QUERIES ────────────────────────────────────
+  // ── F. DOMAIN-SPECIFIC CONTEXT QUERIES ────────────────────────────────────
   const contextQueries: string[] = [];
   if (lowerTarget.includes("south pole") || lowerTarget.includes("lunar") || lowerTarget.includes("moon") || lowerTarget.includes("chandrayaan")) {
     contextQueries.push(`${shortAnchor} ISRO official statement site:isro.gov.in`);
@@ -1604,50 +1747,26 @@ function generateStagedQueries(
     if (!queries.includes(cq)) queries.push(cq);
   }
 
-  // ── D. MAJOR NEWS SOURCES (BBC, News18, Hindustan Times, NDTV, The Hindu, Reuters) ──
-  queries.push(`${shortAnchor} BBC OR News18 OR "Hindustan Times" OR NDTV OR "The Hindu" OR Reuters`);
-  categoriesSearched.push("news");
-
-  // ── E. FACT-CHECKING SOURCES ──────────────────────────────────────────────
-  queries.push(`${shortAnchor} fact check OR debunk OR snopes OR politifact OR "alt news" OR boomlive`);
-  categoriesSearched.push("fact-check");
-
-  // ── F. RESEARCH / ACADEMIC SOURCES ────────────────────────────────────────
-  const researchTerms = claimInfo.entities.slice(0, 2).join(" ");
-  if (researchTerms) {
-    queries.push(`${researchTerms} research OR study OR paper site:nature.com OR site:science.org OR site:arxiv.org OR site:nih.gov`);
-    categoriesSearched.push("research");
-  }
-
-  // ── G. WIKIPEDIA / REFERENCE ──────────────────────────────────────────────
-  queries.push(`${shortAnchor} site:wikipedia.org`);
+  // ── G. WIKIPEDIA / ENCYCLOPEDIA ───────────────────────────────────────────
   if (claimInfo.entities[0]) {
     queries.push(`${claimInfo.entities[0]} site:wikipedia.org`);
+  } else {
+    queries.push(`${shortAnchor} site:wikipedia.org`);
   }
   categoriesSearched.push("wikipedia");
 
-  // ── H. SPECIALIZED / INDUSTRY SOURCES ─────────────────────────────────────
-  if (entityStr) {
-    queries.push(`${entityStr} ${claimInfo.keywords.slice(0, 3).join(" ")}`);
-    categoriesSearched.push("specialized");
+  // ── H. RESEARCH / ACADEMIC SOURCES ────────────────────────────────────────
+  const researchTerms = claimInfo.entities.slice(0, 2).join(" ");
+  if (researchTerms && (lowerTarget.includes("study") || lowerTarget.includes("scientists") || lowerTarget.includes("virus") || lowerTarget.includes("medical") || lowerTarget.includes("space") || lowerTarget.includes("discovered"))) {
+    queries.push(`${researchTerms} research OR study site:nature.com OR site:science.org OR site:nih.gov`);
+    categoriesSearched.push("research");
   }
 
   // ── I. YOUTUBE / VIDEO SOURCES ────────────────────────────────────────────
   queries.push(`${shortAnchor} site:youtube.com`);
   categoriesSearched.push("youtube");
 
-  // ── J. ENTITY-SPECIFIC SEARCHES ───────────────────────────────────────────
-  // Search key named entities separately for broader discovery
-  const topEntities = claimInfo.entities.slice(0, 3);
-  const dateContext = claimInfo.dates.slice(0, 1).join(" ");
-  for (const entity of topEntities) {
-    const entityQuery = `${entity} ${dateContext} ${claimInfo.keywords.slice(0, 2).join(" ")}`.trim();
-    if (entityQuery.length > 10 && !queries.some(q => q.includes(entity) && q.length < entityQuery.length + 20)) {
-      queries.push(entityQuery);
-    }
-  }
-
-  // Deduplicate and limit
+  // Deduplicate and limit to high-yield queries
   const cleanQueries = Array.from(
     new Set(queries.filter((q) => q && q.trim().length > 3))
   ).slice(0, 12);
@@ -2071,6 +2190,98 @@ async function discoverRealWebSources(
     if (discovered.length >= 40) break;
   }
 
+  // Broad Fallback Discovery: If primary queries yielded fewer than 5 sources, query high-yield news feeds
+  if (discovered.length < 5 && (claimInfo.entities.length > 0 || claimInfo.keywords.length > 0)) {
+    const fallbackTerms = [
+      claimInfo.entities.slice(0, 3).join(" "),
+      `${claimInfo.entities.slice(0, 2).join(" ")} ${claimInfo.keywords.slice(0, 2).join(" ")}`,
+      claimInfo.keywords.slice(0, 4).join(" "),
+    ].filter((t) => t && t.trim().length > 3);
+
+    for (const fbTerm of fallbackTerms) {
+      if (discovered.length >= 10) break;
+      try {
+        const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(fbTerm.trim())}&hl=en-IN&gl=IN&ceid=IN:en`;
+        const rssResponse = await fetch(rssUrl, {
+          headers: { "User-Agent": "TruthLensFactCheck/1.0" },
+          signal: AbortSignal.timeout(6000),
+        });
+
+        if (rssResponse.ok) {
+          const rssXml = await rssResponse.text();
+          const itemMatches = rssXml.match(/<item>[\s\S]*?<\/item>/g) || [];
+          for (const item of itemMatches.slice(0, 8)) {
+            const rawTitle = cleanFeedText(item.match(/<title>([\s\S]*?)<\/title>/i)?.[1] || "");
+            const rawLink = cleanFeedText(item.match(/<link>([\s\S]*?)<\/link>/i)?.[1] || "").replace(/&amp;/g, "&");
+            const url = cleanCanonicalUrl(rawLink);
+            const snippet = cleanFeedText(item.match(/<description>([\s\S]*?)<\/description>/i)?.[1] || "");
+
+            const sourceMatch = item.match(/<source\b[^>]*url="([^"]+)"[^>]*>([\s\S]*?)<\/source>/i) ||
+                                item.match(/<source\b[^>]*>([\s\S]*?)<\/source>/i);
+            const sourceUrlAttr = sourceMatch && sourceMatch[1] ? sourceMatch[1].trim() : "";
+            let publisherName = sourceMatch ? cleanFeedText(sourceMatch[2] || sourceMatch[1]) : "";
+
+            let cleanTitle = rawTitle;
+            const titleDashMatch = rawTitle.match(/^(.*?)(?:\s+-\s+([^-]+))$/);
+            if (titleDashMatch) {
+              cleanTitle = titleDashMatch[1].trim();
+              if (!publisherName || publisherName.toLowerCase().includes("google")) {
+                publisherName = titleDashMatch[2].trim();
+              }
+            }
+
+            let publisherDomain = "";
+            if (sourceUrlAttr) {
+              try {
+                const parsedDom = new URL(sourceUrlAttr).hostname.toLowerCase().replace(/^www\./, "");
+                if (parsedDom && !parsedDom.includes("google")) publisherDomain = parsedDom;
+              } catch {}
+            }
+            if (!publisherDomain && publisherName) {
+              for (const [dom, pub] of Object.entries(KNOWN_PUBLISHERS)) {
+                if (publisherName.toLowerCase().includes(pub.toLowerCase())) {
+                  publisherDomain = dom;
+                  break;
+                }
+              }
+            }
+            if (!publisherName || publisherName.toLowerCase().includes("google")) {
+              publisherName = publisherDomain ? extractPublisherFromUrl(`https://${publisherDomain}`) : "News Source";
+            }
+
+            if (!cleanTitle || !url || seenCanonicalUrls.has(url)) continue;
+
+            const effectiveUrl = publisherDomain ? `https://${publisherDomain}` : url;
+            const tierInfo = classifySourceTier(effectiveUrl, publisherName);
+            const fbCandidate: DiscoveredSource = {
+              title: cleanTitle,
+              url,
+              canonicalUrl: url,
+              publisher: publisherName,
+              publisherDomain: publisherDomain || undefined,
+              publisherUrl: sourceUrlAttr || (publisherDomain ? `https://${publisherDomain}` : undefined),
+              snippet,
+              tier: tierInfo.tier,
+              quality: tierInfo.quality,
+            };
+            fbCandidate.relevanceScore = calculateSourceRelevance(
+              fbCandidate,
+              claimInfo.entities,
+              claimInfo.numbers,
+              claimInfo.dates,
+              claimInfo.keywords
+            );
+
+            seenCanonicalUrls.add(url);
+            discovered.push(fbCandidate);
+          }
+        }
+      } catch (fbErr) {
+        console.warn("Fallback discovery warning:", fbErr);
+      }
+    }
+  }
+
   // EVIDENCE RELEVANCE GATE:
   // Sources must relate to the specific claim. But the threshold is calibrated
   // to avoid filtering out legitimate sources that happen to have lower keyword
@@ -2252,10 +2463,10 @@ app.post("/api/verify", async (req, res) => {
   };
 
   try {
-    const { text, userContext, fileBase64, mimeType, fileName } = req.body;
+    const { text, userContext, fileBase64, mimeType, fileName, url: directUrl } = req.body;
 
-    if (!text && !fileBase64 && !userContext) {
-      return res.status(400).json({ error: "Please provide content or a claim to check." });
+    if (!text && !fileBase64 && !userContext && !directUrl) {
+      return res.status(400).json({ error: "Please provide content, a link, or a claim to check." });
     }
 
     emitProgress({
@@ -2275,6 +2486,33 @@ app.post("/api/verify", async (req, res) => {
       fileName?.toLowerCase().endsWith(".doc") ||
       mimeType?.includes("wordprocessingml") ||
       mimeType?.includes("msword");
+
+    // Detect submitted URL (either via directUrl field or URL inside text)
+    const detectedUrlMatch = (directUrl || text || "").match(/https?:\/\/[^\s"'<>]+/i);
+    const submittedPageUrl = detectedUrlMatch ? detectedUrlMatch[0] : null;
+    let webPageData: WebPageMetadata | null = null;
+
+    if (submittedPageUrl) {
+      emitProgress({
+        type: "progress",
+        step: "parse",
+        percent: 10,
+        title: "Reading webpage",
+        message: `Extracting content from ${new URL(submittedPageUrl).hostname}`,
+        log: `PARSE :: reading live webpage at ${submittedPageUrl}...`,
+      });
+      webPageData = await fetchAndExtractWebPage(submittedPageUrl);
+      if (webPageData) {
+        emitProgress({
+          type: "progress",
+          step: "parse",
+          percent: 14,
+          title: "Webpage analyzed",
+          message: `Read ${webPageData.wordCount || 0} words: "${(webPageData.title || "").slice(0, 50)}..."`,
+          log: `PARSE :: extracted article "${webPageData.title || "Untitled"}" from ${webPageData.siteName || "web"}`,
+        });
+      }
+    }
 
     let docxExtractedText = "";
     if (isDocx && fileBase64) {
@@ -2328,10 +2566,13 @@ app.post("/api/verify", async (req, res) => {
       }
     }
 
-    const claimSourceText = youtubeVideoMetadata
+    const cleanWebTitle = webPageData?.title ? cleanTitleForSearch(webPageData.title) : "";
+    const claimSourceText = webPageData
+      ? (cleanWebTitle || webPageData.description || text || "")
+      : youtubeVideoMetadata
       ? `YouTube Video "${youtubeVideoMetadata.title}" by ${youtubeVideoMetadata.channel}: ${text}`
       : (text || docxExtractedText || imageAnalysisData?.mainClaim || imageAnalysisData?.headline || "").trim();
-    const staged = generateStagedQueries(claimSourceText, userContext, imageAnalysisData);
+    const staged = generateStagedQueries(claimSourceText, userContext, imageAnalysisData, webPageData);
 
     emitProgress({
       type: "progress",
@@ -2371,6 +2612,23 @@ app.post("/api/verify", async (req, res) => {
         tier: tierInfo.tier,
         quality: tierInfo.quality,
         relevanceScore: 98,
+      });
+    }
+
+    // If the user submitted a webpage URL, ensure the source is present in candidate pool
+    if (webPageData && !discoveredSources.some((s) => s.url === webPageData!.url)) {
+      const tierInfo = classifySourceTier(webPageData.url, webPageData.siteName || webPageData.author);
+      discoveredSources.unshift({
+        title: webPageData.title || `Article from ${webPageData.siteName || "Web"}`,
+        url: webPageData.url,
+        canonicalUrl: webPageData.url,
+        publisher: webPageData.siteName || extractPublisherFromUrl(webPageData.url),
+        publisherDomain: new URL(webPageData.url).hostname.replace(/^www\./, ""),
+        publisherUrl: `https://${new URL(webPageData.url).hostname}`,
+        snippet: `Submitted URL page: "${webPageData.title || ""}" — ${webPageData.description || (webPageData.extractedText?.slice(0, 200) || "")}`,
+        tier: tierInfo.tier,
+        quality: tierInfo.quality,
+        relevanceScore: 95,
       });
     }
 
@@ -2539,6 +2797,10 @@ OUTPUT JSON FORMAT:
       }
     }
 
+    if (webPageData) {
+      promptText += `[SOURCE A: SUBMITTED WEBPAGE ARTICLE]\nURL: ${webPageData.url}\nPublisher/Site: ${webPageData.siteName || "Web"}\nArticle Title: "${webPageData.title || "Untitled"}"\nDescription/Summary: "${webPageData.description || ""}"\nAuthor: ${webPageData.author || "Unknown"}\nPublished Date: ${webPageData.publishedTime || "Unknown"}\nExtracted Full Article Body Content:\n"""\n${webPageData.extractedText || ""}\n"""\n\nInstruction: Read and analyze this submitted webpage. Identify the core factual assertions and claims made in this article, and verify their truthfulness against the verified external evidence candidates below.\n\n`;
+    }
+
     if (text && text.trim()) {
       promptText += `[SOURCE A: SUBMITTED TEXT]\n"""\n${text.trim()}\n"""\n\n`;
     }
@@ -2568,13 +2830,14 @@ OUTPUT JSON FORMAT:
    - "relationship": "SUPPORTS" | "CONTRADICTS" | "CONTEXT" | "NEUTRAL" — based on what the source ACTUALLY says about this claim, not just keyword match
    - "directness": "direct" (source directly states/proves the fact) | "indirect" (related but doesn't directly establish) | "commentary" | "unknown"
    - "independence": "independent" | "possibly_dependent" (appears to derive from same original source) | "duplicate" | "unknown"
+   - "evidenceSummary": 1-2 informative, objective sentences describing EXACTLY WHAT this source states, quotes, or concludes about this claim. For CONTRADICTS sources: quote or state the official denial/debunking. For SUPPORTS sources: state what confirmed the claim.
+   - "relevance": Same clear evidence summary sentence.
    - "originalSource": If the article cites an original source (e.g. Reuters cites government statement), name the original source
-6. VERDICT GATING:
-   - Do NOT issue a confident TRUE or FALSE verdict based on only 1-2 sources
-   - If only 1 source SUPPORTS, use "LIKELY TRUE" at most (not "TRUE")
-   - If only 1 source CONTRADICTS, use "LIKELY FALSE" at most (not "FALSE")
-   - If sources disagree (some SUPPORT, some CONTRADICT), use "MIXED" and show both sides
-   - With 0-1 relevant sources: verdict should be "UNVERIFIED" unless the single source is an authoritative primary source directly establishing the fact
+6. VERDICT GATING & PROOF REQUIREMENT (CRITICAL):
+   - You MUST NEVER declare a claim "FALSE" or "LIKELY FALSE" without citing at least 1-2 candidate sources explicitly labeled "CONTRADICTS" that cite concrete proof, denials, or fact-checks.
+   - You MUST NEVER declare a claim "TRUE" without citing at least 1-2 candidate sources labeled "SUPPORTS" that verify the facts.
+   - If candidate sources only provide general context without confirming or refuting the claim, or if no proof exists, the verdict MUST be "UNVERIFIED" or "MIXED".
+   - In your "why" and "evidence" arrays, EXPLICITLY state what the sources report (e.g. "News18 and Police records clarify that... while the viral video was taken out of context...").
 7. If a candidate source is irrelevant, REJECT IT. Relevance beats quantity.
 8. Do not count syndicated copies as independent corroboration.
 9. If NO candidate sources are directly relevant, return "sources": [] and verdict "UNVERIFIED".
@@ -2791,7 +3054,36 @@ OUTPUT JSON FORMAT:
         const isWikiUrl = cand.url.includes("wikipedia.org");
         const cat = isYtUrl ? "YouTube" : isWikiUrl ? "Wikipedia" : normalizeCategory(cand.tier, false);
         const tierInfo = classifySourceTier(cand.url, cand.publisher, cat);
-        const rel = parsedResult.verdict === "TRUE" ? "SUPPORTS" : parsedResult.verdict === "FALSE" ? "CONTRADICTS" : "CONTEXT";
+        const lowerSnippet = `${cand.title} ${cand.snippet || ""}`.toLowerCase();
+        let rel: "SUPPORTS" | "CONTRADICTS" | "CONTEXT" = "CONTEXT";
+        if (
+          lowerSnippet.includes("fake") ||
+          lowerSnippet.includes("false") ||
+          lowerSnippet.includes("debunk") ||
+          lowerSnippet.includes("hoax") ||
+          lowerSnippet.includes("denies") ||
+          lowerSnippet.includes("refutes") ||
+          lowerSnippet.includes("dismisses") ||
+          lowerSnippet.includes("clarifies") ||
+          lowerSnippet.includes("not true") ||
+          lowerSnippet.includes("rumour") ||
+          lowerSnippet.includes("rumor")
+        ) {
+          rel = "CONTRADICTS";
+        } else if (
+          lowerSnippet.includes("confirms") ||
+          lowerSnippet.includes("verified") ||
+          lowerSnippet.includes("official statement") ||
+          lowerSnippet.includes("proves")
+        ) {
+          rel = parsedResult.verdict === "TRUE" || parsedResult.verdict === "LIKELY TRUE" ? "SUPPORTS" : "CONTRADICTS";
+        } else {
+          rel = parsedResult.verdict === "TRUE" ? "SUPPORTS" : parsedResult.verdict === "FALSE" ? "CONTRADICTS" : "CONTEXT";
+        }
+
+        const summaryText = cand.snippet && cand.snippet.length > 20
+          ? cand.snippet
+          : `${cand.publisher || "Verified source"} reporting and public documentation regarding this claim.`;
 
         processedSources.push({
           title: cand.title,
@@ -2809,9 +3101,9 @@ OUTPUT JSON FORMAT:
           independence: (cand as any).independence || "Independent",
           directness: "direct",
           isHistorical: false,
-          relevance: cand.snippet || `Corroborating record from ${cand.publisher || "verified evidence index"}.`,
-          evidenceSummary: cand.snippet || `Corroborating record from ${cand.publisher || "verified evidence index"}.`,
-          summary: cand.snippet || `Corroborating record from ${cand.publisher || "verified evidence index"}.`,
+          relevance: summaryText,
+          evidenceSummary: summaryText,
+          summary: summaryText,
           relevanceScore: cand.relevanceScore || 80,
           isVerified: true,
         });
@@ -2834,16 +3126,44 @@ OUTPUT JSON FORMAT:
       parsedResult.sources = sourcesWithReferenceImages;
     }
 
-    // A definitive verdict must be backed by at least one validated source.
-    // Model-only contradiction text is not enough to call a claim false.
-    const requiresValidatedEvidence = ["FALSE", "LIKELY FALSE", "MISLEADING", "MIXED"].includes(parsedResult.verdict);
-    if (requiresValidatedEvidence && parsedResult.sources.length === 0) {
-      parsedResult.verdict = "UNVERIFIED";
-      parsedResult.truthCorrection = undefined;
-      parsedResult.why =
-        "The available search results did not provide a validated source that directly confirms or refutes this claim.";
-      parsedResult.bottomLine =
-        "This claim cannot responsibly be labelled false or misleading until a direct, reliable source is available.";
+    // A definitive verdict must be backed by validated independent sources.
+    // Model-only contradiction text without any external contradicting source cannot call a claim false.
+    const externalSources = processedSources.filter(
+      (s) => !webPageData || s.url !== webPageData.url
+    );
+    const contradictingSources = externalSources.filter(
+      (s) => (s.relationship || "").toUpperCase() === "CONTRADICTS"
+    );
+    const supportingSources = externalSources.filter(
+      (s) => (s.relationship || "").toUpperCase() === "SUPPORTS"
+    );
+
+    if (
+      (parsedResult.verdict === "FALSE" || parsedResult.verdict === "LIKELY FALSE") &&
+      contradictingSources.length === 0
+    ) {
+      if (externalSources.length > 0) {
+        parsedResult.verdict = "UNVERIFIED";
+        parsedResult.why =
+          "TruthLens discovered related public news reports, but found no definitive independent record or official statement directly contradicting or refuting this claim. Further verification is needed.";
+        parsedResult.bottomLine =
+          "Unverified: Lacks conclusive contradictory proof from verified independent sources.";
+      } else {
+        parsedResult.verdict = "UNVERIFIED";
+        parsedResult.truthCorrection = undefined;
+        parsedResult.why =
+          "The available search results did not provide a validated source that directly confirms or refutes this claim.";
+        parsedResult.bottomLine =
+          "This claim cannot responsibly be labelled false or misleading until a direct, reliable source is available.";
+      }
+    } else if (parsedResult.verdict === "TRUE" && supportingSources.length === 0) {
+      if (externalSources.length > 0) {
+        parsedResult.verdict = "UNVERIFIED";
+        parsedResult.why =
+          "Related news records were identified, but no verified source directly confirms the assertion as stated.";
+        parsedResult.bottomLine =
+          "Unverified: Lacks direct corroborating evidence from authoritative records.";
+      }
     }
 
     // ── Evidence Text Sanitization ───────────────────────────────────────────
@@ -3100,6 +3420,11 @@ OUTPUT JSON FORMAT:
         parsedResult.bottomLine =
           "The claim cannot currently be verified because reliable evidence was not found in authoritative records.";
       }
+    }
+
+    if (webPageData) {
+      parsedResult.contentType = "url";
+      parsedResult.sourceUrlMetadata = webPageData;
     }
 
     await saveVerificationQuery(parsedResult, { text, userContext, mimeType, fileName });

@@ -10,6 +10,8 @@ import {
   FileCheck,
   Check,
   Clipboard,
+  Link as LinkIcon,
+  Globe,
 } from "lucide-react";
 import { UploadedFileItem, VerifyRequestPayload } from "../types";
 import { motion, AnimatePresence } from "motion/react";
@@ -28,7 +30,7 @@ export const ChatVerificationInput: React.FC<ChatVerificationInputProps> = ({
   onVerify,
   isLoading,
   initialText = "",
-  placeholder = "Ask TruthLens to verify any claim, news headline, rumor, or drop an image...",
+  placeholder = "Ask TruthLens to verify any claim, paste a website link, drop an image, or upload a document...",
   onClearInitialText,
   className = "",
   autoFocus = false,
@@ -374,6 +376,24 @@ export const ChatVerificationInput: React.FC<ChatVerificationInputProps> = ({
               rows={2}
               className="w-full bg-transparent text-sm sm:text-base text-slate-900 dark:text-slate-100 placeholder:text-slate-400/80 resize-none outline-none leading-relaxed transition-all min-h-[44px] max-h-[180px] py-1"
             />
+            {/* Live URL Badge when a link is detected in input */}
+            {(() => {
+              const urlMatch = text.match(/https?:\/\/[^\s"'<>]+/i);
+              if (!urlMatch) return null;
+              try {
+                const u = new URL(urlMatch[0]);
+                return (
+                  <div className="mt-1 flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-teal-500/10 dark:bg-teal-500/15 border border-teal-500/25 text-teal-700 dark:text-teal-300 text-[11px] font-medium w-fit animate-in fade-in">
+                    <Globe className="w-3.5 h-3.5 text-teal-500 shrink-0" />
+                    <span className="truncate max-w-[260px] sm:max-w-md">
+                      Webpage link detected: <strong>{u.hostname}</strong> (Auto-deep crawl & fact-check enabled)
+                    </span>
+                  </div>
+                );
+              } catch {
+                return null;
+              }
+            })()}
           </div>
 
           {/* Bottom Action Bar: + Icon, Helper info & Enter / Send Button */}
@@ -457,6 +477,35 @@ export const ChatVerificationInput: React.FC<ChatVerificationInputProps> = ({
                           </p>
                         </div>
                       </button>
+
+                      {/* Option 3: Verify Webpage Link */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowUploadMenu(false);
+                          if (!text.trim()) {
+                            setText("https://");
+                          }
+                          if (textareaRef.current) {
+                            textareaRef.current.focus();
+                            const len = textareaRef.current.value.length;
+                            textareaRef.current.setSelectionRange(len, len);
+                          }
+                        }}
+                        className="w-full flex items-center gap-3 p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800/70 transition-colors text-left cursor-pointer group mt-0.5"
+                      >
+                        <div className="w-9 h-9 rounded-xl bg-purple-500/15 border border-purple-500/30 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                          <LinkIcon className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-slate-900 dark:text-slate-100 group-hover:text-purple-600 dark:group-hover:text-purple-300 transition-colors">
+                            Verify Webpage URL
+                          </p>
+                          <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
+                            Paste any news, blog, or viral post link
+                          </p>
+                        </div>
+                      </button>
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -482,7 +531,7 @@ export const ChatVerificationInput: React.FC<ChatVerificationInputProps> = ({
               </button>
 
               <span className="hidden md:inline-block text-[11px] text-slate-400 dark:text-slate-500">
-                Images, PDFs & claims
+                Links, Images, PDFs & claims
               </span>
             </div>
 

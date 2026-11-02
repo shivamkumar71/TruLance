@@ -28,6 +28,9 @@ import {
   FileCheck,
   HelpCircle,
   Compass,
+  Link2,
+  Globe,
+  Quote,
 } from "lucide-react";
 import { VerificationResult, VerificationSource } from "../types";
 import { motion, AnimatePresence } from "motion/react";
@@ -291,6 +294,8 @@ export const ResultView: React.FC<ResultViewProps> = ({
   const VerdictIcon = meta.icon;
   const isMedia = result.contentType === "image";
   const hasDocument = result.contentType === "pdf" || result.contentType === "document";
+  const isWebUrl = result.contentType === "url" || Boolean(result.sourceUrlMetadata);
+  const webMeta = result.sourceUrlMetadata;
   const independent =
     result.searchTransparency?.independentSourcesFound ??
     new Set(verifiedSources.map((s) => s.independence)).size;
@@ -598,8 +603,27 @@ export const ResultView: React.FC<ResultViewProps> = ({
           <div>
             <div className="flex items-center justify-between gap-2 pb-4 border-b border-slate-100 dark:border-slate-800">
               <span className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                <FileImage className="w-4 h-4 text-teal-600 dark:text-teal-400" />
-                {isMedia ? "IMAGE EVIDENCE" : hasDocument ? "DOCUMENT EVIDENCE" : "INPUT CLAIM"}
+                {isWebUrl ? (
+                  <>
+                    <Globe className="w-4 h-4 text-purple-500" />
+                    <span>WEBPAGE VERIFICATION</span>
+                  </>
+                ) : isMedia ? (
+                  <>
+                    <FileImage className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+                    <span>IMAGE EVIDENCE</span>
+                  </>
+                ) : hasDocument ? (
+                  <>
+                    <FileCheck className="w-4 h-4 text-blue-500" />
+                    <span>DOCUMENT EVIDENCE</span>
+                  </>
+                ) : (
+                  <>
+                    <FileImage className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+                    <span>INPUT CLAIM</span>
+                  </>
+                )}
               </span>
               <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/25">
                 {verifiedSources.length} Sources Analyzed
@@ -607,7 +631,41 @@ export const ResultView: React.FC<ResultViewProps> = ({
             </div>
 
             <div className="py-5">
-              {isMedia && inputPreviewUrl ? (
+              {isWebUrl && webMeta ? (
+                <div className="space-y-3">
+                  <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      {webMeta.favicon ? (
+                        <img src={webMeta.favicon} alt="" className="w-4 h-4 rounded-full shrink-0" onError={(e) => ((e.target as HTMLElement).style.display = "none")} />
+                      ) : (
+                        <Globe className="w-3.5 h-3.5 text-purple-500 shrink-0" />
+                      )}
+                      <span className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">
+                        {webMeta.siteName || "Web Source"}
+                      </span>
+                      <a
+                        href={webMeta.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="ml-auto inline-flex items-center gap-1 text-[11px] text-teal-600 dark:text-teal-400 hover:underline shrink-0"
+                      >
+                        Visit Link <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
+                    <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200 leading-snug line-clamp-2">
+                      {webMeta.title || "Analyzed Web Page"}
+                    </h3>
+                    {webMeta.description && (
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-2 leading-relaxed">
+                        {webMeta.description}
+                      </p>
+                    )}
+                  </div>
+                  <blockquote className="text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300 italic pl-3 border-l-2 border-teal-500">
+                    Extracted claim: “{text(result.claim)}”
+                  </blockquote>
+                </div>
+              ) : isMedia && inputPreviewUrl ? (
                 <div className="relative rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 group max-h-[220px]">
                   <img
                     src={inputPreviewUrl}
@@ -638,7 +696,7 @@ export const ResultView: React.FC<ResultViewProps> = ({
                 {result.claimType || "Factual Claim"}
               </strong>
             </span>
-            <span>{isMedia ? "Visual Media" : hasDocument ? "Document Scan" : "Text"}</span>
+            <span>{isWebUrl ? "Webpage Link" : isMedia ? "Visual Media" : hasDocument ? "Document Scan" : "Text"}</span>
           </div>
         </div>
 
@@ -1182,64 +1240,83 @@ export const ResultView: React.FC<ResultViewProps> = ({
             return (
               <div
                 key={url || idx}
-                className="p-3.5 rounded-2xl bg-slate-50 hover:bg-slate-100/90 dark:bg-slate-800/50 dark:hover:bg-slate-800/80 border border-slate-200/70 dark:border-slate-700/70 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-left group"
+                className="p-4 rounded-2xl bg-slate-50 hover:bg-slate-100/90 dark:bg-slate-800/50 dark:hover:bg-slate-800/80 border border-slate-200/70 dark:border-slate-700/70 transition-all flex flex-col gap-3 text-left group"
               >
-                <div className="flex items-start gap-3 min-w-0 flex-1">
-                  {/* Rank Badge */}
-                  <span className="w-6 h-6 rounded-lg bg-slate-200/80 dark:bg-slate-700 flex items-center justify-center text-[11px] font-bold text-slate-700 dark:text-slate-300 shrink-0">
-                    {idx + 1}
-                  </span>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-start gap-3 min-w-0 flex-1">
+                    {/* Rank Badge */}
+                    <span className="w-6 h-6 rounded-lg bg-slate-200/80 dark:bg-slate-700 flex items-center justify-center text-[11px] font-bold text-slate-700 dark:text-slate-300 shrink-0">
+                      {idx + 1}
+                    </span>
 
-                  {/* Publisher Favicon & Names */}
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 mb-1 flex-wrap">
-                      {identity.logoUrl && (
-                        <img
-                          src={identity.logoUrl}
-                          alt=""
-                          className="w-4 h-4 rounded-full shrink-0"
-                          onError={(e) => ((e.target as HTMLElement).style.display = "none")}
-                        />
-                      )}
-                      <strong className="text-xs font-bold text-slate-900 dark:text-slate-100">
-                        {identity.publisher}
-                      </strong>
-                      {identity.domain && (
-                        <span className="text-[10px] text-slate-400 truncate">
-                          ({identity.domain})
+                    {/* Publisher Favicon & Names */}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        {identity.logoUrl && (
+                          <img
+                            src={identity.logoUrl}
+                            alt=""
+                            className="w-4 h-4 rounded-full shrink-0"
+                            onError={(e) => ((e.target as HTMLElement).style.display = "none")}
+                          />
+                        )}
+                        <strong className="text-xs font-bold text-slate-900 dark:text-slate-100">
+                          {identity.publisher}
+                        </strong>
+                        {identity.domain && (
+                          <span className="text-[10px] text-slate-400 truncate">
+                            ({identity.domain})
+                          </span>
+                        )}
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border flex items-center gap-1 ${rel.bg}`}>
+                          <RelIcon className="w-2.5 h-2.5" />
+                          {rel.label}
                         </span>
-                      )}
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border flex items-center gap-1 ${rel.bg}`}>
-                        <RelIcon className="w-2.5 h-2.5" />
-                        {rel.label}
-                      </span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-md bg-slate-200/60 dark:bg-slate-700/60 text-slate-600 dark:text-slate-300 font-medium">
-                        {sourceType(s, identity.domain)}
-                      </span>
-                    </div>
+                        <span className="text-[10px] px-2 py-0.5 rounded-md bg-slate-200/60 dark:bg-slate-700/60 text-slate-600 dark:text-slate-300 font-medium">
+                          {sourceType(s, identity.domain)}
+                        </span>
+                      </div>
 
-                    <p className="text-xs text-slate-700 dark:text-slate-300 line-clamp-1 group-hover:text-teal-600 dark:group-hover:text-teal-300 transition-colors">
-                      {text(s.title)}
-                    </p>
+                      <p className="text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-200 group-hover:text-teal-600 dark:group-hover:text-teal-300 transition-colors leading-snug">
+                        {text(s.title)}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Right Action: Open URL */}
+                  <div className="shrink-0 flex items-center justify-end sm:self-start">
+                    {url ? (
+                      <a
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white dark:bg-slate-900 hover:bg-teal-500 hover:text-slate-950 dark:hover:bg-teal-400 dark:hover:text-slate-950 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 transition-all shadow-2xs group/btn cursor-pointer"
+                      >
+                        <span>Read Source</span>
+                        <ExternalLink className="w-3 h-3 group-hover/btn:translate-x-0.5 transition-transform" />
+                      </a>
+                    ) : (
+                      <span className="text-[10px] text-slate-400">Unavailable</span>
+                    )}
                   </div>
                 </div>
 
-                {/* Right Action: Open URL */}
-                <div className="shrink-0 flex items-center justify-end">
-                  {url ? (
-                    <a
-                      href={url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white dark:bg-slate-900 hover:bg-teal-500 hover:text-slate-950 dark:hover:bg-teal-400 dark:hover:text-slate-950 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 transition-all shadow-2xs group/btn cursor-pointer"
-                    >
-                      <span>Read Source</span>
-                      <ExternalLink className="w-3 h-3 group-hover/btn:translate-x-0.5 transition-transform" />
-                    </a>
-                  ) : (
-                    <span className="text-[10px] text-slate-400">Unavailable</span>
-                  )}
-                </div>
+                {/* What this source says / proves (Evidence Statement) */}
+                {(s.evidenceSummary || s.relevance || s.summary) && (
+                  <div className="p-3 rounded-xl bg-white/80 dark:bg-slate-900/70 border border-slate-200/80 dark:border-slate-700/70 text-xs text-slate-700 dark:text-slate-300 leading-relaxed flex items-start gap-2.5">
+                    <Quote className="w-3.5 h-3.5 text-teal-500 shrink-0 mt-0.5" />
+                    <div className="min-w-0 flex-1">
+                      <span className="font-bold text-slate-900 dark:text-white mr-1.5">
+                        {rel.label === "Contradicts"
+                          ? "Counter-Evidence Finding:"
+                          : rel.label === "Supports"
+                          ? "Corroborating Finding:"
+                          : "Contextual Finding:"}
+                      </span>
+                      <span>{text(s.evidenceSummary || s.relevance || s.summary)}</span>
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })}
